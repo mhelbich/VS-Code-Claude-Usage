@@ -1,0 +1,90 @@
+{
+  "name": "claude-code-usage-status",
+  "displayName": "Claude Code Usage Status",
+  "description": "Shows Claude Code session / weekly usage in the status bar",
+  "publisher": "mhelbich",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mhelbich/vs-code-claude-usage"
+  },
+  "bugs": {
+    "url": "https://github.com/mhelbich/vs-code-claude-usage/issues"
+  },
+  "homepage": "https://github.com/mhelbich/vs-code-claude-usage#readme",
+  "license": "MIT",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "usage",
+    "status-bar"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeUsage.refresh",
+        "title": "Claude Usage: Refresh Now"
+      }
+    ],
+    "configuration": {
+      "title": "Claude Code Usage",
+      "properties": {
+        "claudeUsage.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 30,
+          "description": "How often (in seconds) to poll Claude Code usage. Default: 120 seconds (2 minutes).",
+          "order": 1
+        },
+        "claudeUsage.warningThreshold": {
+          "type": "number",
+          "default": 60,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Usage % at which the indicator turns yellow (warning). Default: 60%.",
+          "order": 2
+        },
+        "claudeUsage.dangerThreshold": {
+          "type": "number",
+          "default": 90,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Usage % at which the indicator turns red (danger). Default: 90%.",
+          "order": 3
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "typecheck": "tsc --noEmit",
+    "watch": "tsc -watch -p ./",
+    "pretest:unit": "npm run compile",
+    "test:unit": "node --test out/unit/**/*.test.js",
+    "pretest:vscode": "npm run compile",
+    "test:vscode": "vscode-test",
+    "test": "npm run test:unit && npm run test:vscode",
+    "package": "vsce package",
+    "deploy": "vsce publish",
+    "release": "npm version patch && git push --follow-tags"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.15",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.7.1",
+    "typescript": "^5.9.3"
+  }
+}

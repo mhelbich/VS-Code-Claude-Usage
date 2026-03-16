@@ -1,0 +1,14 @@
+.vscode/**
+.vscode-test/**
+.vscode-test.*
+src/**
+node_modules/**
+.git/**
+.gitignore
+.vscodeignore
+tsconfig.json
+package-lock.json
+*.vsix
+**/.DS_Store
+out/test/**
+out/unit/**
