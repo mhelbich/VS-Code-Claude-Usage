@@ -63,6 +63,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         return;
       }
       const thresholdsValue = thresholds();
+      bar.backgroundColor = undefined;
       bar.text = buildStatusText(usage, thresholdsValue);
       bar.tooltip = buildTooltip(usage, thresholdsValue);
     } catch (e) {
