@@ -2,32 +2,37 @@ import * as vscode from "vscode";
 import { fetchUsage } from "./api";
 import { COMMANDS, CONFIG_PATHS, getClaudeUsageSetting } from "./config";
 import { getAccessToken } from "./credentials";
-import { buildStatusText, buildTooltipMarkdown } from "./render";
-import { ColorThresholds, UsageResponse } from "./types";
+import { Action, BarProps, State, reduce, stateToBarProps } from "./statusBar";
 
-function buildTooltip(usage: UsageResponse, t: ColorThresholds): vscode.MarkdownString {
-  const md = new vscode.MarkdownString(undefined, true);
-  md.isTrusted = true;
-  md.supportHtml = true;
-  md.appendMarkdown(buildTooltipMarkdown(usage, t));
-  return md;
+function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
+  bar.text = props.text;
+  bar.backgroundColor = props.backgroundColor ? new vscode.ThemeColor(`statusBarItem.${props.backgroundColor}Background`) : undefined;
+  if (props.tooltipIsMarkdown) {
+    const md = new vscode.MarkdownString(undefined, true);
+    md.isTrusted = true;
+    md.supportHtml = true;
+    md.appendMarkdown(props.tooltipText);
+    bar.tooltip = md;
+  } else {
+    bar.tooltip = props.tooltipText;
+  }
 }
 
 // ─── Extension lifecycle ──────────────────────────────────────────────────────
 
 export function activate(ctx: vscode.ExtensionContext) {
-  const thresholds = (): ColorThresholds => ({
-    warning: getClaudeUsageSetting("warningThreshold"),
-    danger: getClaudeUsageSetting("dangerThreshold"),
-  });
-
   // Create status bar item
   const bar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   bar.command = COMMANDS.refresh;
-  bar.text = "$(pulse) Claude …";
-  bar.tooltip = "Claude Code usage — loading";
   bar.show();
   ctx.subscriptions.push(bar);
+
+  let state: State = { kind: "loading" };
+
+  function dispatch(action: Action): void {
+    state = reduce(state, action);
+    applyProps(stateToBarProps(state), bar);
+  }
 
   let timer: ReturnType<typeof setInterval> | undefined;
   ctx.subscriptions.push(
@@ -39,44 +44,32 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
   );
 
-  /**
-   * Fetch usage data and update the status bar item accordingly, handling various error states (no token, API error, etc.) and displaying appropriate text, colors, and tooltips based on the current usage and configured thresholds.
-   * This function is called when the extension is activated, when the user clicks the status bar item to refresh, and whenever relevant configuration settings are changed.
-   */
   async function refresh() {
+    dispatch({ type: "refresh-started" });
     const token = getAccessToken();
-    // ERROR: No Token
     if (!token) {
-      bar.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
-      bar.text = "$(pulse) Claude ✗";
-      bar.tooltip = new vscode.MarkdownString("Claude Code: not logged in — run `claude /login`");
+      dispatch({ type: "no-token" });
       return;
     }
-
     try {
       const usage = await fetchUsage(token);
-      // ERROR: No Usage data
       if (!usage) {
-        bar.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground");
-        bar.text = "$(pulse) Claude !";
-        bar.tooltip = "Claude Code: API error";
+        dispatch({ type: "fetch-error" });
         return;
       }
-      const thresholdsValue = thresholds();
-      bar.backgroundColor = undefined;
-      bar.text = buildStatusText(usage, thresholdsValue);
-      bar.tooltip = buildTooltip(usage, thresholdsValue);
+      dispatch({
+        type: "fetch-success",
+        usage,
+        thresholds: {
+          warning: getClaudeUsageSetting("warningThreshold"),
+          danger: getClaudeUsageSetting("dangerThreshold"),
+        },
+      });
     } catch (e) {
-      // ERROR: API call failed
-      bar.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground");
-      bar.text = "$(pulse) Claude !";
-      bar.tooltip = new vscode.MarkdownString(`Claude Code\n\`${String(e)}\``);
+      dispatch({ type: "fetch-error", message: String(e) });
     }
   }
 
-  /**
-   * Start or restart the refresh timer based on the current configuration setting, used when the extension is activated and whenever the refresh interval setting is changed by the user.
-   */
   function startTimer() {
     if (timer) clearInterval(timer);
     const intervalMs = getClaudeUsageSetting("refreshIntervalSeconds") * 1000;
@@ -85,22 +78,27 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   // Register commands and listeners
   ctx.subscriptions.push(
-    // Commands
     vscode.commands.registerCommand(COMMANDS.refresh, () => {
       refresh();
     }),
-    // React to config changes
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration(CONFIG_PATHS.refreshIntervalSeconds)) {
         startTimer();
       }
       if (e.affectsConfiguration(CONFIG_PATHS.warningThreshold) || e.affectsConfiguration(CONFIG_PATHS.dangerThreshold)) {
-        refresh();
+        dispatch({
+          type: "thresholds-changed",
+          thresholds: {
+            warning: getClaudeUsageSetting("warningThreshold"),
+            danger: getClaudeUsageSetting("dangerThreshold"),
+          },
+        });
       }
     }),
   );
 
-  // Kick off
+  // Initialize status bar immediately then kick off async refresh
+  applyProps(stateToBarProps(state), bar);
   refresh();
   startTimer();
 }
