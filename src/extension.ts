@@ -22,6 +22,9 @@ function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
 // ─── Extension lifecycle ──────────────────────────────────────────────────────
 
 export function activate(ctx: vscode.ExtensionContext) {
+  const log = vscode.window.createOutputChannel("Claude Code Usage", { log: true });
+  ctx.subscriptions.push(log);
+
   // Create status bar item
   const bar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   bar.command = COMMANDS.refresh;
@@ -51,6 +54,8 @@ export function activate(ctx: vscode.ExtensionContext) {
     const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
     const cached = readCache();
     if (cached && isCacheFresh(cached, intervalSeconds)) {
+      const ageSeconds = Math.round((Date.now() - cached.fetchedAt) / 1000);
+      log.debug(`Cache hit (${ageSeconds}s old) — skipping API call`);
       dispatch({
         type: "fetch-success",
         usage: cached.data,
@@ -62,18 +67,22 @@ export function activate(ctx: vscode.ExtensionContext) {
       return;
     }
 
+    log.debug("Cache missing or stale — fetching from API");
     const token = getAccessToken();
     if (!token) {
+      log.warn("No valid access token found — run `claude /login` to sign in");
       dispatch({ type: "no-token" });
       return;
     }
     try {
       const usage = await fetchUsage(token);
       if (!usage) {
+        log.error("API request returned a non-2xx response");
         dispatch({ type: "fetch-error" });
         return;
       }
       writeCache(usage);
+      log.info("Usage fetched successfully");
       dispatch({
         type: "fetch-success",
         usage,
@@ -83,19 +92,22 @@ export function activate(ctx: vscode.ExtensionContext) {
         },
       });
     } catch (e) {
+      log.error(`Unexpected error during fetch: ${String(e)}`);
       dispatch({ type: "fetch-error", message: String(e) });
     }
   }
 
   function startTimer() {
     if (timer) clearInterval(timer);
-    const intervalMs = getClaudeUsageSetting("refreshIntervalSeconds") * 1000;
-    timer = setInterval(refresh, intervalMs);
+    const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
+    log.info(`Refresh timer set to ${intervalSeconds}s`);
+    timer = setInterval(refresh, intervalSeconds * 1000);
   }
 
   // Register commands and listeners
   ctx.subscriptions.push(
     vscode.commands.registerCommand(COMMANDS.refresh, () => {
+      log.info("Manual refresh triggered");
       refresh();
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -103,18 +115,20 @@ export function activate(ctx: vscode.ExtensionContext) {
         startTimer();
       }
       if (e.affectsConfiguration(CONFIG_PATHS.warningThreshold) || e.affectsConfiguration(CONFIG_PATHS.dangerThreshold)) {
+        const warning = getClaudeUsageSetting("warningThreshold");
+        const danger = getClaudeUsageSetting("dangerThreshold");
+        log.info(`Thresholds updated — warning: ${warning}%, danger: ${danger}%`);
         dispatch({
           type: "thresholds-changed",
-          thresholds: {
-            warning: getClaudeUsageSetting("warningThreshold"),
-            danger: getClaudeUsageSetting("dangerThreshold"),
-          },
+          thresholds: { warning, danger },
         });
       }
     }),
   );
 
   // Initialize status bar immediately then kick off async refresh
+  const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
+  log.info(`Activated — refresh interval: ${intervalSeconds}s`);
   applyProps(stateToBarProps(state), bar);
   refresh();
   startTimer();
