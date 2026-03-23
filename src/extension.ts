@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { fetchUsage } from "./api";
+import { isCacheFresh, readCache, writeCache } from "./cache";
 import { COMMANDS, CONFIG_PATHS, getClaudeUsageSetting } from "./config";
 import { getAccessToken } from "./credentials";
 import { Action, BarProps, State, reduce, stateToBarProps } from "./statusBar";
@@ -46,6 +47,21 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   async function refresh() {
     dispatch({ type: "refresh-started" });
+
+    const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
+    const cached = readCache();
+    if (cached && isCacheFresh(cached, intervalSeconds)) {
+      dispatch({
+        type: "fetch-success",
+        usage: cached.data,
+        thresholds: {
+          warning: getClaudeUsageSetting("warningThreshold"),
+          danger: getClaudeUsageSetting("dangerThreshold"),
+        },
+      });
+      return;
+    }
+
     const token = getAccessToken();
     if (!token) {
       dispatch({ type: "no-token" });
@@ -57,6 +73,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         dispatch({ type: "fetch-error" });
         return;
       }
+      writeCache(usage);
       dispatch({
         type: "fetch-success",
         usage,
