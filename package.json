@@ -60,6 +60,12 @@
           "maximum": 100,
           "description": "Usage % at which the indicator turns red (danger). Default: 90%.",
           "order": 3
+        },
+        "claudeUsage.showUsed": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show used % instead of remaining % in the status bar and tooltip.",
+          "order": 4
         }
       }
     }

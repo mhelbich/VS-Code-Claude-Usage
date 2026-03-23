@@ -9,6 +9,7 @@ export interface ClaudeUsageConfiguration {
   refreshIntervalSeconds: number;
   warningThreshold: number;
   dangerThreshold: number;
+  showUsed: boolean;
 }
 export type ClaudeUsageConfigKey = keyof ClaudeUsageConfiguration;
 
@@ -19,6 +20,7 @@ export const CONFIG_DEFAULTS: ClaudeUsageConfiguration = {
   refreshIntervalSeconds: 120,
   warningThreshold: 60,
   dangerThreshold: 90,
+  showUsed: false,
 };
 
 /**
@@ -28,6 +30,7 @@ export const CONFIG_KEYS = {
   refreshIntervalSeconds: "refreshIntervalSeconds",
   warningThreshold: "warningThreshold",
   dangerThreshold: "dangerThreshold",
+  showUsed: "showUsed",
 } as const satisfies Record<ClaudeUsageConfigKey, ClaudeUsageConfigKey>;
 
 /**
@@ -37,6 +40,7 @@ export const CONFIG_PATHS = {
   refreshIntervalSeconds: `${CONFIG_SECTION}.${CONFIG_KEYS.refreshIntervalSeconds}`,
   warningThreshold: `${CONFIG_SECTION}.${CONFIG_KEYS.warningThreshold}`,
   dangerThreshold: `${CONFIG_SECTION}.${CONFIG_KEYS.dangerThreshold}`,
+  showUsed: `${CONFIG_SECTION}.${CONFIG_KEYS.showUsed}`,
 } as const satisfies Record<ClaudeUsageConfigKey, `${typeof CONFIG_SECTION}.${ClaudeUsageConfigKey}`>;
 
 /**

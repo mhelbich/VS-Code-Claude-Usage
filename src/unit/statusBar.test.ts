@@ -124,3 +124,18 @@ test("stateToBarProps: ok tooltip matches buildTooltipMarkdown", () => {
   assert.equal(props.tooltipIsMarkdown, true);
   assert.equal(props.tooltipText, buildTooltipMarkdown(usage, thresholds));
 });
+
+test("stateToBarProps: ok with showUsed=true produces text matching buildStatusText with showUsed=true", () => {
+  const props = stateToBarProps({ kind: "ok", usage, thresholds }, true);
+  assert.equal(props.text, buildStatusText(usage, thresholds, true));
+});
+
+test("stateToBarProps: ok with showUsed=false produces text matching buildStatusText with showUsed=false", () => {
+  const props = stateToBarProps({ kind: "ok", usage, thresholds }, false);
+  assert.equal(props.text, buildStatusText(usage, thresholds, false));
+});
+
+test("stateToBarProps: ok with showUsed=true tooltip matches buildTooltipMarkdown with showUsed=true", () => {
+  const props = stateToBarProps({ kind: "ok", usage, thresholds }, true);
+  assert.equal(props.tooltipText, buildTooltipMarkdown(usage, thresholds, undefined, true));
+});

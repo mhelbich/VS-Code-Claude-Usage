@@ -48,6 +48,24 @@ test("buildStatusText falls back when no usage buckets are present", () => {
   assert.equal(buildStatusText({}, thresholds), "$(pulse) Claude —");
 });
 
+test("buildStatusText shows used % when showUsed is true", () => {
+  const usage: UsageResponse = {
+    five_hour: { utilization: 18, resets_at: null },
+    seven_day: { utilization: 62, resets_at: null },
+  };
+
+  assert.equal(buildStatusText(usage, thresholds, true), "$(pulse) 🟢 S: 18% │ 🟡 W: 62%");
+});
+
+test("buildStatusText shows remaining % when showUsed is false", () => {
+  const usage: UsageResponse = {
+    five_hour: { utilization: 18, resets_at: null },
+    seven_day: { utilization: 62, resets_at: null },
+  };
+
+  assert.equal(buildStatusText(usage, thresholds, false), "$(pulse) 🟢 S: 82% │ 🟡 W: 38%");
+});
+
 test("buildTooltipMarkdown renders all enabled sections", () => {
   const usage: UsageResponse = {
     five_hour: { utilization: 25, resets_at: "2026-03-16T12:30:00.000Z" },
@@ -79,4 +97,30 @@ test("buildTooltipMarkdown shows disabled extra usage when not enabled", () => {
   const tooltip = buildTooltipMarkdown({}, thresholds);
 
   assert.match(tooltip, /\*\*Extra usage:\*\* ✗ not enabled/);
+});
+
+test("buildTooltipMarkdown shows used % and 'used' label when showUsed is true", () => {
+  const usage: UsageResponse = {
+    five_hour: { utilization: 25, resets_at: null },
+    seven_day: { utilization: 70, resets_at: null },
+  };
+
+  const tooltip = buildTooltipMarkdown(usage, thresholds, undefined, true);
+
+  assert.match(tooltip, /\*\*25\.0%\*\* used/);
+  assert.match(tooltip, /\*\*70\.0%\*\* used/);
+  assert.doesNotMatch(tooltip, /remaining/);
+});
+
+test("buildTooltipMarkdown shows remaining % and 'remaining' label when showUsed is false", () => {
+  const usage: UsageResponse = {
+    five_hour: { utilization: 25, resets_at: null },
+    seven_day: { utilization: 70, resets_at: null },
+  };
+
+  const tooltip = buildTooltipMarkdown(usage, thresholds, undefined, false);
+
+  assert.match(tooltip, /\*\*75\.0%\*\* remaining/);
+  assert.match(tooltip, /\*\*30\.0%\*\* remaining/);
+  assert.doesNotMatch(tooltip, / used/);
 });

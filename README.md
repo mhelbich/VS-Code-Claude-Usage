@@ -28,7 +28,7 @@ _Status bar_:
 
 - `S` = session (5-hour rolling window)
 - `W` = weekly (7-day rolling window)
-- Percentage = **remaining** capacity
+- Percentage = **remaining** capacity by default; set `claudeUsage.showUsed` to `true` to flip to **used** %
 - 🟢 plenty of headroom · 🟡 getting low · 🔴 almost out
 
 ### Tooltip
@@ -47,11 +47,12 @@ You must be logged in to Claude Code (`claude /login`). The extension reads your
 
 ## Settings
 
-| Setting                              | Default | Description                                 |
-| ------------------------------------ | ------- | ------------------------------------------- |
-| `claudeUsage.refreshIntervalSeconds` | `120`   | How often (in seconds) to poll usage        |
-| `claudeUsage.warningThreshold`       | `60`    | Usage % at which the indicator turns yellow |
-| `claudeUsage.dangerThreshold`        | `90`    | Usage % at which the indicator turns red    |
+| Setting                              | Default | Description                                                      |
+| ------------------------------------ | ------- | ---------------------------------------------------------------- |
+| `claudeUsage.refreshIntervalSeconds` | `120`   | How often (in seconds) to poll usage                             |
+| `claudeUsage.warningThreshold`       | `60`    | Usage % at which the indicator turns yellow                      |
+| `claudeUsage.dangerThreshold`        | `90`    | Usage % at which the indicator turns red                         |
+| `claudeUsage.showUsed`               | `false` | Show used % instead of remaining % in the status bar and tooltip |
 
 Thresholds are expressed as **used %** (e.g. the default `60` means "warn when 60% has been consumed, i.e. 40% remaining").
 

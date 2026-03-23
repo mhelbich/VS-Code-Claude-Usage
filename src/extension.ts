@@ -35,7 +35,7 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   function dispatch(action: Action): void {
     state = reduce(state, action);
-    applyProps(stateToBarProps(state), bar);
+    applyProps(stateToBarProps(state, getClaudeUsageSetting("showUsed")), bar);
   }
 
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -123,13 +123,18 @@ export function activate(ctx: vscode.ExtensionContext) {
           thresholds: { warning, danger },
         });
       }
+      if (e.affectsConfiguration(CONFIG_PATHS.showUsed)) {
+        const showUsed = getClaudeUsageSetting("showUsed");
+        log.info(`Display mode updated — showUsed: ${showUsed}`);
+        applyProps(stateToBarProps(state, showUsed), bar);
+      }
     }),
   );
 
   // Initialize status bar immediately then kick off async refresh
   const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
   log.info(`Activated — refresh interval: ${intervalSeconds}s`);
-  applyProps(stateToBarProps(state), bar);
+  applyProps(stateToBarProps(state, getClaudeUsageSetting("showUsed")), bar);
   refresh();
   startTimer();
 }

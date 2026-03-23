@@ -51,24 +51,24 @@ export function formatReset(isoDate: string | null | undefined, options: ResetFo
   return `${relative} (${absolute})`;
 }
 
-export function buildStatusText(usage: UsageResponse, t: ColorThresholds): string {
+export function buildStatusText(usage: UsageResponse, t: ColorThresholds, showUsed = false): string {
   const session = usage.five_hour;
   const week = usage.seven_day;
 
   const parts: string[] = [];
   if (session) {
-    const rem = 100 - session.utilization;
-    parts.push(`${utilColor(session.utilization, t)} S: ${rem.toFixed(0)}%`);
+    const value = showUsed ? session.utilization : 100 - session.utilization;
+    parts.push(`${utilColor(session.utilization, t)} S: ${value.toFixed(0)}%`);
   }
   if (week) {
-    const rem = 100 - week.utilization;
-    parts.push(`${utilColor(week.utilization, t)} W: ${rem.toFixed(0)}%`);
+    const value = showUsed ? week.utilization : 100 - week.utilization;
+    parts.push(`${utilColor(week.utilization, t)} W: ${value.toFixed(0)}%`);
   }
 
   return parts.length ? `$(pulse) ${parts.join(" │ ")}` : "$(pulse) Claude —";
 }
 
-export function buildTooltipMarkdown(usage: UsageResponse, t: ColorThresholds, options?: ResetFormatOptions): string {
+export function buildTooltipMarkdown(usage: UsageResponse, t: ColorThresholds, options?: ResetFormatOptions, showUsed = false): string {
   const session = usage.five_hour;
   const week = usage.seven_day;
   const opus = usage.seven_day_opus;
@@ -78,23 +78,29 @@ export function buildTooltipMarkdown(usage: UsageResponse, t: ColorThresholds, o
 
   if (session) {
     const rem = 100 - session.utilization;
+    const displayValue = showUsed ? session.utilization : rem;
+    const label = showUsed ? "used" : "remaining";
     markdown +=
       `**Session (5h)**\n\n` +
-      `${makeHtmlBar(rem, session.utilization, t)} **${rem.toFixed(1)}%** remaining\n\n` +
+      `${makeHtmlBar(rem, session.utilization, t)} **${displayValue.toFixed(1)}%** ${label}\n\n` +
       `Resets in ${formatReset(session.resets_at, options)}\n\n`;
   }
 
   if (week) {
     const rem = 100 - week.utilization;
+    const displayValue = showUsed ? week.utilization : rem;
+    const label = showUsed ? "used" : "remaining";
     markdown +=
       `**Weekly (7d)**\n\n` +
-      `${makeHtmlBar(rem, week.utilization, t)} **${rem.toFixed(1)}%** remaining\n\n` +
+      `${makeHtmlBar(rem, week.utilization, t)} **${displayValue.toFixed(1)}%** ${label}\n\n` +
       `Resets in ${formatReset(week.resets_at, options)}\n\n`;
   }
 
   if (opus && opus.utilization !== undefined) {
     const rem = 100 - opus.utilization;
-    markdown += `**Opus (7d)**\n\n${makeHtmlBar(rem, opus.utilization, t)} **${rem.toFixed(1)}%** remaining\n\n`;
+    const displayValue = showUsed ? opus.utilization : rem;
+    const label = showUsed ? "used" : "remaining";
+    markdown += `**Opus (7d)**\n\n${makeHtmlBar(rem, opus.utilization, t)} **${displayValue.toFixed(1)}%** ${label}\n\n`;
   }
 
   if (extra && extra.is_enabled) {
