@@ -48,12 +48,12 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
   );
 
-  async function refresh() {
+  async function refresh(force = false) {
     dispatch({ type: "refresh-started" });
 
     const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
     const cached = readCache();
-    if (cached && isCacheFresh(cached, intervalSeconds)) {
+    if (!force && cached && isCacheFresh(cached, intervalSeconds)) {
       const ageSeconds = Math.round((Date.now() - cached.fetchedAt) / 1000);
       log.debug(`Cache hit (${ageSeconds}s old) — skipping API call`);
       dispatch({
@@ -108,7 +108,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(
     vscode.commands.registerCommand(COMMANDS.refresh, () => {
       log.info("Manual refresh triggered");
-      refresh();
+      refresh(true);
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration(CONFIG_PATHS.refreshIntervalSeconds)) {
