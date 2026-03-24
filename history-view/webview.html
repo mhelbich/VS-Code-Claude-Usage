@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'nonce-{{NONCE}}' {{CSP_SOURCE}}; style-src {{CSP_SOURCE}} 'unsafe-inline';">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Usage</title>
+  <link rel="stylesheet" href="{{CSS_URI}}">
+</head>
+
+<body>
+  <div id="controls">
+    <button data-range="3600000" class="active">1h</button>
+    <button data-range="21600000">6h</button>
+    <button data-range="86400000">1d</button>
+    <button data-range="604800000">7d</button>
+    <button data-range="2592000000">30d</button>
+  </div>
+  <div id="empty">No data yet — usage will appear after the first refresh.</div>
+  <div id="chart-wrap"><canvas id="chart"></canvas></div>
+  <div id="footer">Last updated: <span id="last-updated">—</span></div>
+
+  <script nonce="{{NONCE}}">
+    window.__INITIAL_ENTRIES__ = {{INITIAL_ENTRIES}};
+    window.__INITIAL_SHOW_USED__ = {{INITIAL_SHOW_USED}};
+  </script>
+  <script nonce="{{NONCE}}" src="{{CHART_URI}}"></script>
+  <script nonce="{{NONCE}}" src="{{JS_URI}}"></script>
+</body>
+
+</html>

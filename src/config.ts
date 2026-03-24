@@ -10,6 +10,7 @@ export interface ClaudeUsageConfiguration {
   warningThreshold: number;
   dangerThreshold: number;
   showUsed: boolean;
+  historyRetentionDays: number;
 }
 export type ClaudeUsageConfigKey = keyof ClaudeUsageConfiguration;
 
@@ -21,6 +22,7 @@ export const CONFIG_DEFAULTS: ClaudeUsageConfiguration = {
   warningThreshold: 60,
   dangerThreshold: 90,
   showUsed: false,
+  historyRetentionDays: 30,
 };
 
 /**
@@ -31,6 +33,7 @@ export const CONFIG_KEYS = {
   warningThreshold: "warningThreshold",
   dangerThreshold: "dangerThreshold",
   showUsed: "showUsed",
+  historyRetentionDays: "historyRetentionDays",
 } as const satisfies Record<ClaudeUsageConfigKey, ClaudeUsageConfigKey>;
 
 /**
@@ -41,6 +44,7 @@ export const CONFIG_PATHS = {
   warningThreshold: `${CONFIG_SECTION}.${CONFIG_KEYS.warningThreshold}`,
   dangerThreshold: `${CONFIG_SECTION}.${CONFIG_KEYS.dangerThreshold}`,
   showUsed: `${CONFIG_SECTION}.${CONFIG_KEYS.showUsed}`,
+  historyRetentionDays: `${CONFIG_SECTION}.${CONFIG_KEYS.historyRetentionDays}`,
 } as const satisfies Record<ClaudeUsageConfigKey, `${typeof CONFIG_SECTION}.${ClaudeUsageConfigKey}`>;
 
 /**

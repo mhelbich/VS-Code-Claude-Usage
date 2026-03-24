@@ -3,7 +3,10 @@ import { fetchUsage } from "./api";
 import { isCacheFresh, readCache, writeCache } from "./cache";
 import { COMMANDS, CONFIG_PATHS, getClaudeUsageSetting } from "./config";
 import { getAccessToken } from "./credentials";
+import { HistoryStore } from "./history";
 import { Action, BarProps, State, reduce, stateToBarProps } from "./statusBar";
+import type { HistoryEntry } from "./types";
+import { UsageHistoryProvider } from "./webviewProvider";
 
 function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
   bar.text = props.text;
@@ -24,6 +27,14 @@ function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
 export function activate(ctx: vscode.ExtensionContext) {
   const log = vscode.window.createOutputChannel("Claude Code Usage", { log: true });
   ctx.subscriptions.push(log);
+
+  const historyStore = new HistoryStore(
+    vscode.Uri.joinPath(ctx.globalStorageUri, "usage-history.json").fsPath,
+    (msg) => log.warn(msg),
+    () => getClaudeUsageSetting("historyRetentionDays"),
+  );
+  const historyProvider = new UsageHistoryProvider(ctx.extensionUri, historyStore);
+  ctx.subscriptions.push(vscode.window.registerWebviewViewProvider(UsageHistoryProvider.viewId, historyProvider));
 
   // Create status bar item
   const bar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -83,6 +94,16 @@ export function activate(ctx: vscode.ExtensionContext) {
       }
       writeCache(usage);
       log.info("Usage fetched successfully");
+      const entry: HistoryEntry = {
+        timestamp: Date.now(),
+        five_hour: usage.five_hour?.utilization ?? null,
+        seven_day: usage.seven_day?.utilization ?? null,
+        seven_day_opus: usage.seven_day_opus?.utilization ?? null,
+        extra_used: usage.extra_usage?.used_credits ?? null,
+        extra_limit: usage.extra_usage?.monthly_limit ?? null,
+      };
+      historyStore.append(entry);
+      historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"));
       dispatch({
         type: "fetch-success",
         usage,
@@ -123,10 +144,15 @@ export function activate(ctx: vscode.ExtensionContext) {
           thresholds: { warning, danger },
         });
       }
+      if (e.affectsConfiguration(CONFIG_PATHS.historyRetentionDays)) {
+        log.info(`History retention updated — ${getClaudeUsageSetting("historyRetentionDays")} days`);
+        historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"));
+      }
       if (e.affectsConfiguration(CONFIG_PATHS.showUsed)) {
         const showUsed = getClaudeUsageSetting("showUsed");
         log.info(`Display mode updated — showUsed: ${showUsed}`);
         applyProps(stateToBarProps(state, showUsed), bar);
+        historyProvider.refresh(historyStore.read(), showUsed);
       }
     }),
   );

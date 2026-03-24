@@ -1,0 +1,54 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--fg, var(--vscode-foreground));
+  background: var(--panel-bg, var(--vscode-sideBar-background));
+  padding: 8px;
+}
+
+#empty {
+  display: none;
+  padding: 16px;
+  text-align: center;
+  opacity: 0.7;
+}
+
+#controls {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+button {
+  background: var(--btn-bg, var(--vscode-button-secondaryBackground));
+  color: var(--btn-fg, var(--vscode-button-secondaryForeground));
+  border: none;
+  padding: 3px 8px;
+  cursor: pointer;
+  border-radius: 2px;
+  font-size: 11px;
+}
+
+button.active {
+  background: var(--btn-act-bg, var(--vscode-button-background));
+  color: var(--btn-act-fg, var(--vscode-button-foreground));
+}
+
+#chart-wrap {
+  position: relative;
+  height: calc(100vh - 80px);
+  min-height: 160px;
+}
+
+#footer {
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.6;
+}
