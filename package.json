@@ -118,6 +118,6 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.7.1",
     "chart.js": "^4.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   }
 }
