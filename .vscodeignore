@@ -12,3 +12,5 @@ package-lock.json
 **/.DS_Store
 out/test/**
 out/unit/**
+.claude/**
+.github/**
