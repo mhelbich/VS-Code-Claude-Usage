@@ -29,6 +29,25 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "claude-usage",
+          "title": "Claude Usage",
+          "icon": "assets/claude-usage-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "claude-usage": [
+        {
+          "type": "webview",
+          "id": "claudeUsage.historyView",
+          "name": "Usage History",
+          "icon": "assets/claude-usage-icon.svg"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "claudeUsage.refresh",
@@ -66,6 +85,13 @@
           "default": false,
           "description": "Show used % instead of remaining % in the status bar and tooltip.",
           "order": 4
+        },
+        "claudeUsage.historyRetentionDays": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "description": "Number of days of usage history to retain.",
+          "order": 5
         }
       }
     }
@@ -91,6 +117,7 @@
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.7.1",
+    "chart.js": "^4.5.1",
     "typescript": "^5.9.3"
   }
 }
