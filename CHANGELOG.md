@@ -2,6 +2,12 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [0.2.1] - 2026-03-25
+
+### Fixed
+
+- **Refresh interval was effectively doubled** — the cache timestamp was recorded after the async API call completed rather than when the refresh started. This meant the next timer tick (exactly `refreshIntervalSeconds` later) saw a cache that was a few hundred milliseconds shy of the threshold and skipped the fetch. Every other tick was silently skipped, doubling the actual interval (e.g. a 5-minute setting behaved like 10 minutes).
+
 ## [0.2.0] - 2026-03-24
 
 ### Added
