@@ -45,6 +45,28 @@ test("isCacheFresh returns false when entry age exactly equals the interval", ()
   assert.equal(isCacheFresh(entry, 120, 121_000), false);
 });
 
+test("isCacheFresh treats cache as stale when timer fires one interval after fetch started", () => {
+  // Regression test: previously fetchedAt was recorded when the write completed
+  // (after an async API call), not when the fetch started. This caused the next
+  // timer tick — exactly intervalSeconds later — to see a cache that was
+  // intervalSeconds - fetchLatency old, which appeared fresh, so the fetch was
+  // skipped. The effective refresh interval doubled.
+  //
+  // With the fix, fetchedAt is recorded when refresh() starts, so the next
+  // timer tick sees a cache that is exactly intervalSeconds old → stale → fetches.
+  const intervalSeconds = 300;
+  const fetchStartedAt = 0;
+  const fetchLatencyMs = 500; // typical async API round-trip
+
+  // Fixed: fetchedAt = when fetch started → stale at next timer tick
+  const entryFixed: CacheEntry = { fetchedAt: fetchStartedAt, data: sampleUsage };
+  assert.equal(isCacheFresh(entryFixed, intervalSeconds, fetchStartedAt + intervalSeconds * 1_000), false);
+
+  // Bug: fetchedAt = when write completed → appears fresh at next timer tick
+  const entryBug: CacheEntry = { fetchedAt: fetchStartedAt + fetchLatencyMs, data: sampleUsage };
+  assert.equal(isCacheFresh(entryBug, intervalSeconds, fetchStartedAt + intervalSeconds * 1_000), true);
+});
+
 // ─── readCacheWithDependencies ────────────────────────────────────────────────
 
 function makeDeps(overrides: Partial<CacheDependencies> = {}): CacheDependencies {
@@ -121,6 +143,21 @@ test("writeCacheWithDependencies writes a CacheEntry with the current timestamp"
   const parsed = JSON.parse(writtenContent!) as CacheEntry;
   assert.equal(parsed.fetchedAt, 9_000);
   assert.deepEqual(parsed.data, sampleUsage);
+});
+
+test("writeCacheWithDependencies uses explicit fetchedAt when provided", () => {
+  let writtenContent: string | undefined;
+  const deps = makeDeps({
+    now: () => 9_000,
+    writeFileSync: (_, data) => {
+      writtenContent = data;
+    },
+  });
+
+  writeCacheWithDependencies(sampleUsage, deps, 1_000);
+
+  const parsed = JSON.parse(writtenContent!) as CacheEntry;
+  assert.equal(parsed.fetchedAt, 1_000);
 });
 
 test("writeCacheWithDependencies writes to the correct path", () => {

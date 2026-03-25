@@ -56,10 +56,10 @@ export function readCacheWithDependencies(deps: CacheDependencies): CacheEntry |
  * because the cache is purely a performance optimisation — a missing cache only
  * results in an extra API call, never in broken behaviour.
  */
-export function writeCacheWithDependencies(data: UsageResponse, deps: CacheDependencies): void {
+export function writeCacheWithDependencies(data: UsageResponse, deps: CacheDependencies, fetchedAt?: number): void {
   try {
     const cachePath = getCacheFilePath(deps.configDir, deps.homedir(), deps.joinPath);
-    const entry: CacheEntry = { fetchedAt: deps.now(), data };
+    const entry: CacheEntry = { fetchedAt: fetchedAt ?? deps.now(), data };
     deps.writeFileSync(cachePath, JSON.stringify(entry), "utf8");
   } catch {
     // ignore — cache is best-effort
@@ -90,6 +90,6 @@ export function readCache(): CacheEntry | null {
   return readCacheWithDependencies(realDeps);
 }
 
-export function writeCache(data: UsageResponse): void {
-  writeCacheWithDependencies(data, realDeps);
+export function writeCache(data: UsageResponse, fetchedAt?: number): void {
+  writeCacheWithDependencies(data, realDeps, fetchedAt);
 }

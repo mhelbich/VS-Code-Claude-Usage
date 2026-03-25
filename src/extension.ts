@@ -60,6 +60,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   );
 
   async function refresh(force = false) {
+    const refreshStartedAt = Date.now();
     dispatch({ type: "refresh-started" });
 
     const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
@@ -92,7 +93,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         dispatch({ type: "fetch-error" });
         return;
       }
-      writeCache(usage);
+      writeCache(usage, refreshStartedAt);
       log.info("Usage fetched successfully");
       const entry: HistoryEntry = {
         timestamp: Date.now(),
