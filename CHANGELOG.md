@@ -2,6 +2,13 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [0.2.2] - 2026-04-01
+
+### Fixed
+
+- **History graph showed no data on first open** — a race condition between the extension's async refresh and the webview's JavaScript initialization caused `postMessage` updates to be silently dropped if they arrived before the message listener was registered. The webview now sends a `ready` signal once its scripts are loaded, and the extension re-sends the current history in response, guaranteeing the chart always reflects up-to-date data regardless of timing.
+- **Data points were evenly spaced on the x-axis regardless of actual time between them** — the chart was using Chart.js's default `category` scale, which treats each point as equidistant. Switched to a `linear` scale with timestamp values so a manual refresh 2 minutes into a 5-minute interval is rendered at the correct relative position. Tooltip titles are also formatted as human-readable dates rather than raw timestamps.
+
 ## [0.2.1] - 2026-03-25
 
 ### Fixed
