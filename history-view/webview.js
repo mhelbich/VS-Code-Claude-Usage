@@ -50,8 +50,14 @@
       maintainAspectRatio: false,
       scales: {
         x: {
-          ticks: { maxTicksLimit: 6, color: fg, font: { size: 10 } },
-          grid:  { color: gridLine },
+          type: 'linear',
+          ticks: {
+            maxTicksLimit: 6,
+            color: fg,
+            font: { size: 10 },
+            callback: (val) => formatTs(val),
+          },
+          grid: { color: gridLine },
         },
         yPct: {
           type: 'linear', position: 'left', min: 0, max: 100,
@@ -68,7 +74,13 @@
       },
       plugins: {
         legend:  { labels: { color: fg, font: { size: 11 }, boxWidth: 12 } },
-        tooltip: { mode: 'index', intersect: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            title: (items) => items.length ? formatTs(items[0].parsed.x) : '',
+          },
+        },
       },
     },
   });
@@ -89,12 +101,12 @@
     document.getElementById('chart-wrap').style.display = empty ? 'none'  : 'block';
     document.getElementById('controls').style.display   = empty ? 'none'  : 'flex';
 
-    chart.data.labels = filtered.map(e => formatTs(e.timestamp));
+    chart.data.labels = [];
     DATASETS.forEach((d, i) => {
       chart.data.datasets[i].data = filtered.map(e => {
         const v = e[d.key];
-        if (d.yAxisID === 'yPct' && v !== null) return showUsed ? v : 100 - v;
-        return v;
+        const y = (d.yAxisID === 'yPct' && v !== null) ? (showUsed ? v : 100 - v) : v;
+        return { x: e.timestamp, y };
       });
     });
 
