@@ -18,6 +18,11 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
     this._view = view;
     view.webview.options = { enableScripts: true, localResourceRoots: [this.extensionUri] };
     view.webview.html = this._buildHtml(view.webview, this.store.read(), this._showUsed);
+    view.webview.onDidReceiveMessage((msg) => {
+      if (msg?.type === "ready") {
+        view.webview.postMessage({ type: "data", entries: this.store.read(), showUsed: this._showUsed });
+      }
+    });
   }
 
   refresh(entries: HistoryEntry[], showUsed: boolean): void {

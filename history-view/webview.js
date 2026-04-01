@@ -127,4 +127,10 @@
   });
 
   render();
+
+  // Signal to the extension that the webview is ready to receive messages.
+  // This handles the race where postMessage is called before the JS listener
+  // is registered, which would silently drop the message.
+  const vscode = acquireVsCodeApi();
+  vscode.postMessage({ type: 'ready' });
 })();
