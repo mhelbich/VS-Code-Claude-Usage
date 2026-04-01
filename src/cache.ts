@@ -67,12 +67,23 @@ export function writeCacheWithDependencies(data: UsageResponse, deps: CacheDepen
 }
 
 /**
- * Returns true when the cache entry is younger than the configured refresh
- * interval, meaning the cached data is still considered current and no API
- * call is needed. Accepts an optional `now` argument so tests can control time.
+ * How many milliseconds before the configured interval expires the cache is
+ * treated as stale.  This tolerance absorbs the small gap between when the
+ * setInterval tick fires and when Date.now() is captured inside refresh():
+ * without it the next tick would see a cache that is `interval - ε` ms old,
+ * which is strictly less than `interval`, so the fetch would be skipped and
+ * the effective refresh rate would halve.
+ */
+export const FRESHNESS_TOLERANCE_MS = 2_000;
+
+/**
+ * Returns true when the cache entry is young enough that no new API call is
+ * needed.  "Young enough" means the entry is at least FRESHNESS_TOLERANCE_MS
+ * shy of the full interval so that timer-tick jitter never causes a fetch to
+ * be skipped.  Accepts an optional `now` argument so tests can control time.
  */
 export function isCacheFresh(entry: CacheEntry, intervalSeconds: number, now = Date.now()): boolean {
-  return now - entry.fetchedAt < intervalSeconds * 1000;
+  return now - entry.fetchedAt < intervalSeconds * 1000 - FRESHNESS_TOLERANCE_MS;
 }
 
 // ─── Simple public API (uses the real filesystem) ────────────────────────────

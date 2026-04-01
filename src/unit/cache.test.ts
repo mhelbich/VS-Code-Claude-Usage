@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { CacheDependencies, CacheEntry, getCacheFilePath, isCacheFresh, readCacheWithDependencies, writeCacheWithDependencies } from "../cache";
+import { CacheDependencies, CacheEntry, FRESHNESS_TOLERANCE_MS, getCacheFilePath, isCacheFresh, readCacheWithDependencies, writeCacheWithDependencies } from "../cache";
 import type { UsageResponse } from "../types";
 
 const sampleUsage: UsageResponse = {
@@ -41,30 +41,38 @@ test("isCacheFresh returns false when entry is older than the interval", () => {
 
 test("isCacheFresh returns false when entry age exactly equals the interval", () => {
   const entry: CacheEntry = { fetchedAt: 1_000, data: sampleUsage };
-  // boundary: now - fetchedAt === intervalSeconds * 1000 → not strictly less than
+  // boundary: now - fetchedAt === intervalSeconds * 1000 → older than interval - TOLERANCE
   assert.equal(isCacheFresh(entry, 120, 121_000), false);
 });
 
-test("isCacheFresh treats cache as stale when timer fires one interval after fetch started", () => {
-  // Regression test: previously fetchedAt was recorded when the write completed
-  // (after an async API call), not when the fetch started. This caused the next
-  // timer tick — exactly intervalSeconds later — to see a cache that was
-  // intervalSeconds - fetchLatency old, which appeared fresh, so the fetch was
-  // skipped. The effective refresh interval doubled.
-  //
-  // With the fix, fetchedAt is recorded when refresh() starts, so the next
-  // timer tick sees a cache that is exactly intervalSeconds old → stale → fetches.
-  const intervalSeconds = 300;
-  const fetchStartedAt = 0;
-  const fetchLatencyMs = 500; // typical async API round-trip
+test("isCacheFresh returns true when entry age is just under interval minus tolerance", () => {
+  const entry: CacheEntry = { fetchedAt: 1_000, data: sampleUsage };
+  // interval=120s, tolerance=2s → threshold = 118 000 ms; checking at t = 118 999 (age 117 999 ms)
+  assert.equal(isCacheFresh(entry, 120, 1_000 + 120_000 - FRESHNESS_TOLERANCE_MS - 1), true);
+});
 
-  // Fixed: fetchedAt = when fetch started → stale at next timer tick
-  const entryFixed: CacheEntry = { fetchedAt: fetchStartedAt, data: sampleUsage };
-  assert.equal(isCacheFresh(entryFixed, intervalSeconds, fetchStartedAt + intervalSeconds * 1_000), false);
+test("isCacheFresh returns false when entry age equals interval minus tolerance", () => {
+  const entry: CacheEntry = { fetchedAt: 1_000, data: sampleUsage };
+  // age exactly at the tolerance boundary → stale
+  assert.equal(isCacheFresh(entry, 120, 1_000 + 120_000 - FRESHNESS_TOLERANCE_MS), false);
+});
 
-  // Bug: fetchedAt = when write completed → appears fresh at next timer tick
-  const entryBug: CacheEntry = { fetchedAt: fetchStartedAt + fetchLatencyMs, data: sampleUsage };
-  assert.equal(isCacheFresh(entryBug, intervalSeconds, fetchStartedAt + intervalSeconds * 1_000), true);
+test("isCacheFresh treats cache as stale when timer tick fires a few ms before refreshStartedAt", () => {
+  // Regression: setInterval fires at a scheduled tick; Date.now() inside refresh() is captured
+  // epsilon ms LATER, so fetchedAt = tickTime + epsilon. The *next* tick fires at
+  // tickTime + interval, making the cache age (interval - epsilon) ms — strictly less than
+  // interval — which previously caused isCacheFresh to return true and skip the fetch.
+  // The FRESHNESS_TOLERANCE_MS buffer ensures the cache is treated as stale in this case.
+  const intervalSeconds = 150;
+  const tickTime = 0;
+  const epsilon = 3; // ms between tick firing and Date.now() inside refresh()
+
+  const entry: CacheEntry = { fetchedAt: tickTime + epsilon, data: sampleUsage };
+  const nextTickTime = tickTime + intervalSeconds * 1_000;
+
+  // Without the tolerance this would return true (cache appears fresh) → fetch skipped.
+  // With the tolerance the cache is correctly treated as stale → fetch proceeds.
+  assert.equal(isCacheFresh(entry, intervalSeconds, nextTickTime), false);
 });
 
 // ─── readCacheWithDependencies ────────────────────────────────────────────────
