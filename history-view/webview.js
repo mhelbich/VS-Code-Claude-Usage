@@ -110,6 +110,9 @@
       });
     });
 
+    chart.options.scales.x.min = cutoff;
+    chart.options.scales.x.max = now;
+
     chart.options.scales.yPct.title.text = showUsed ? '% used' : '% remaining';
 
     const latestLimit = [...allEntries].reverse().find(e => e.extra_limit !== null)?.extra_limit;
