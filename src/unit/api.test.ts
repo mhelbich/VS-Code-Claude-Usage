@@ -14,7 +14,7 @@ test("fetchUsage calls the Anthropic usage endpoint with the expected headers", 
     calls.push({ input, init });
     return {
       ok: true,
-      json: async () => ({} satisfies UsageResponse),
+      json: async () => ({}) satisfies UsageResponse,
     } as Response;
   }) as typeof fetch;
 
@@ -59,24 +59,27 @@ test("fetchUsage returns parsed usage data when the response is ok", async () =>
   }
 });
 
-test("fetchUsage returns null when the response is not ok", async () => {
+test("fetchUsage throws with status and body when the response is not ok", async () => {
   const originalFetch = globalThis.fetch;
-  let jsonCalled = false;
 
   globalThis.fetch = (async () =>
     ({
       ok: false,
-      json: async () => {
-        jsonCalled = true;
-        return {};
-      },
+      status: 401,
+      statusText: "Unauthorized",
+      text: async () => '{"error":"invalid_token"}',
     }) as Response) as typeof fetch;
 
   try {
-    const result = await fetchUsage("test-token");
-
-    assert.equal(result, null);
-    assert.equal(jsonCalled, false);
+    await assert.rejects(
+      () => fetchUsage("test-token"),
+      (err: Error) => {
+        assert.ok(err.message.includes("401"));
+        assert.ok(err.message.includes("Unauthorized"));
+        assert.ok(err.message.includes("invalid_token"));
+        return true;
+      },
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

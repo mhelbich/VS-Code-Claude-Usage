@@ -88,11 +88,6 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
     try {
       const usage = await fetchUsage(token);
-      if (!usage) {
-        log.error("API request returned a non-2xx response");
-        dispatch({ type: "fetch-error" });
-        return;
-      }
       writeCache(usage, refreshStartedAt);
       log.info("Usage fetched successfully");
       const entry: HistoryEntry = {
