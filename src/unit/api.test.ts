@@ -31,7 +31,7 @@ test("fetchUsage calls the Anthropic usage endpoint with the expected headers", 
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      "User-Agent": "claude-code/2.0.32",
+      "User-Agent": "claude-code/2.1.104",
       Authorization: "Bearer test-token",
       "anthropic-beta": "oauth-2025-04-20",
     },
