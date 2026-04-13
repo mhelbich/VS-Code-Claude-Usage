@@ -2,6 +2,19 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [0.2.3] - 2026-04-13
+
+### Fixed
+
+- **History chart x-axis was not anchored to the expected time range** — the chart now sets explicit min/max bounds on the x-axis based on the selected time range cutoff and the current time, preventing Chart.js from auto-scaling to the data points and misrepresenting gaps at the edges.
+- **Improved error handling in `fetchUsage`** — invalid or unexpected API responses are now caught earlier and surfaced with clearer messages rather than propagating as hard-to-diagnose downstream errors.
+
+### Maintenance
+
+- Updated User-Agent header to reflect current Claude Code version (`2.1.104`).
+- Fixed missing `types` configuration in `tsconfig.json` and test suite import for proper Mocha type resolution.
+- Bumped `@types/node` from `22.19.15` to `22.19.17`.
+
 ## [0.2.2] - 2026-04-01
 
 ### Fixed
