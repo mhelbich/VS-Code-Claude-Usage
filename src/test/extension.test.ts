@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
+import { suite } from "mocha";
 import { COMMANDS, CONFIG_KEYS, CONFIG_SECTION } from "../config";
 
 suite("Claude Code Usage", () => {
