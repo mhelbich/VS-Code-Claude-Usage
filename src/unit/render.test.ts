@@ -112,6 +112,23 @@ test("buildTooltipMarkdown shows used % and 'used' label when showUsed is true",
   assert.doesNotMatch(tooltip, /remaining/);
 });
 
+test("buildTooltipMarkdown inverts html bar when showUsed is true", () => {
+  // 25% utilization: showUsed=false → 15 colored blocks (75% remaining)
+  //                  showUsed=true  →  5 colored blocks (25% used)
+  const usage: UsageResponse = { five_hour: { utilization: 25, resets_at: null } };
+
+  const tooltipRemaining = buildTooltipMarkdown(usage, thresholds, undefined, false);
+  const tooltipUsed = buildTooltipMarkdown(usage, thresholds, undefined, true);
+
+  const countColored = (tooltip: string) => {
+    const m = tooltip.match(/color:#4EC9B0;">(█+)<\/span>/);
+    return m ? m[1].length : 0;
+  };
+
+  assert.equal(countColored(tooltipRemaining), 15, "remaining mode: 75% of 20 blocks should be colored");
+  assert.equal(countColored(tooltipUsed), 5, "used mode: 25% of 20 blocks should be colored");
+});
+
 test("buildTooltipMarkdown shows remaining % and 'remaining' label when showUsed is false", () => {
   const usage: UsageResponse = {
     five_hour: { utilization: 25, resets_at: null },
