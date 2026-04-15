@@ -2,6 +2,7 @@
   "name": "claude-code-usage-status",
   "displayName": "Claude Code Usage Status",
   "description": "Shows Claude Code session / weekly usage in the status bar",
+  "icon": "assets/icon.png",
   "publisher": "mhelbich",
   "repository": {
     "type": "git",
