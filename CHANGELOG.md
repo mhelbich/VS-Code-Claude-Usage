@@ -2,6 +2,17 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [0.2.4] - 2026-04-15
+
+### Fixed
+
+- **Tooltip bar was not inverted when showing used percentage** — the HTML bar always rendered remaining capacity as the colored portion, ignoring the `showUsed` setting. The bar now visually matches the displayed metric: colored blocks represent used % when `showUsed` is enabled, remaining % otherwise.
+
+### Maintenance
+
+- CI/CD Github Read-only token permissions
+- Bumped `@types/vscode` and `@vscode/vsce`
+
 ## [0.2.3] - 2026-04-13
 
 ### Fixed
