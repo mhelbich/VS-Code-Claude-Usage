@@ -11,7 +11,7 @@ All notable changes to the **Claude Code Usage Status** extension will be docume
 ### Maintenance
 
 - CI/CD Github Read-only token permissions
-- Bumped `@types/vscode` and `@vscode/vsce`
+- Bumped `@vscode/vsce`
 
 ## [0.2.3] - 2026-04-13
 
