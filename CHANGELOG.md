@@ -2,6 +2,12 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [0.2.5] - 2026-04-21
+
+### Maintenance
+
+- Added an icon for the extension - because icons are cool.
+
 ## [0.2.4] - 2026-04-15
 
 ### Fixed
