@@ -121,7 +121,7 @@
     "@types/vscode": "1.85.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.8.0",
+    "@vscode/vsce": "^3.9.1",
     "chart.js": "^4.5.1",
     "typescript": "^5.9.3"
   }
