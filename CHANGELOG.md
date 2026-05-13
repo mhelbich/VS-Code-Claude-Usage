@@ -2,6 +2,12 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [0.2.6] - 2026-05-13
+
+### Maintenance
+
+- Bumped dev dependencies: `fast-uri`, `@types/node`, and `@vscode/vsce` to latest versions.
+
 ## [0.2.5] - 2026-04-21
 
 ### Maintenance
