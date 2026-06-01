@@ -2,6 +2,12 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [0.2.7] - 2026-06-01
+
+### Maintenance
+
+- npm packages maintenance.
+
 ## [0.2.6] - 2026-05-13
 
 ### Maintenance
