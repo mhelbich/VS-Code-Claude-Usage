@@ -2,6 +2,12 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [0.2.8] - 2026-06-03
+
+### Fixed
+
+- Status bar no longer flickers during refresh — existing data is kept visible while new data loads, switching to the loading indicator only on initial load or after an error.
+
 ## [0.2.7] - 2026-06-01
 
 ### Maintenance
