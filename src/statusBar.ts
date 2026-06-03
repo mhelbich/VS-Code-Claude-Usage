@@ -24,7 +24,7 @@ export interface BarProps {
 export function reduce(state: State, action: Action): State {
   switch (action.type) {
     case "refresh-started":
-      return { kind: "loading" };
+      return state.kind === "ok" ? state : { kind: "loading" };
     case "fetch-success":
       return { kind: "ok", usage: action.usage, thresholds: action.thresholds };
     case "fetch-error":
