@@ -19,9 +19,9 @@ test("reduce: refresh-started returns loading from loading state", () => {
   assert.deepEqual(reduce(state, { type: "refresh-started" }), { kind: "loading" });
 });
 
-test("reduce: refresh-started returns loading from ok state", () => {
+test("reduce: refresh-started preserves ok state to avoid flickering", () => {
   const state: State = { kind: "ok", usage, thresholds };
-  assert.deepEqual(reduce(state, { type: "refresh-started" }), { kind: "loading" });
+  assert.deepEqual(reduce(state, { type: "refresh-started" }), state);
 });
 
 test("reduce: refresh-started returns loading from error state", () => {
