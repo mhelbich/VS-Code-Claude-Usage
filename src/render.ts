@@ -16,6 +16,8 @@ export interface WeeklyForecast {
   projectedLimitHitAt: number | null;
 }
 
+export type WeeklyPaceStatus = "under" | "on" | "over";
+
 const defaultAbsoluteFormatter = (date: Date): string =>
   date.toLocaleString(undefined, {
     weekday: "short",
@@ -103,6 +105,23 @@ export function getWeeklyForecast(usage: UsageResponse, now = Date.now()): Weekl
   };
 }
 
+export function getWeeklyPaceStatus(forecast: WeeklyForecast): WeeklyPaceStatus {
+  if (forecast.projectedUtilizationAtReset <= 95) return "under";
+  if (forecast.projectedUtilizationAtReset <= 100) return "on";
+  return "over";
+}
+
+export function getWeeklyPaceIcon(forecast: WeeklyForecast): string {
+  switch (getWeeklyPaceStatus(forecast)) {
+    case "under":
+      return "$(arrow-down)";
+    case "on":
+      return "$(arrow-right)";
+    case "over":
+      return "$(arrow-up)";
+  }
+}
+
 function formatWeeklyForecastSummary(forecast: WeeklyForecast, showUsed: boolean, options?: ResetFormatOptions): string {
   if (forecast.projectedLimitHitAt !== null) {
     const projectedHit = formatReset(new Date(forecast.projectedLimitHitAt).toISOString(), options);
@@ -118,9 +137,10 @@ function formatWeeklyForecastSummary(forecast: WeeklyForecast, showUsed: boolean
     : `Forecast: Projected weekly remaining at reset: ${projectedRemaining.toFixed(1)}%.`;
 }
 
-export function buildStatusText(usage: UsageResponse, t: ColorThresholds, showUsed = false): string {
+export function buildStatusText(usage: UsageResponse, t: ColorThresholds, showUsed = false, now = Date.now()): string {
   const session = usage.five_hour;
   const week = usage.seven_day;
+  const weeklyForecast = getWeeklyForecast(usage, now);
 
   const parts: string[] = [];
   if (session) {
@@ -129,7 +149,8 @@ export function buildStatusText(usage: UsageResponse, t: ColorThresholds, showUs
   }
   if (week) {
     const value = showUsed ? week.utilization : 100 - week.utilization;
-    parts.push(`${utilColor(week.utilization, t)} W: ${value.toFixed(0)}%`);
+    const paceIcon = weeklyForecast ? ` ${getWeeklyPaceIcon(weeklyForecast)}` : "";
+    parts.push(`${utilColor(week.utilization, t)} W: ${value.toFixed(0)}%${paceIcon}`);
   }
 
   return parts.length ? `$(pulse) ${parts.join(" │ ")}` : "$(pulse) Claude —";

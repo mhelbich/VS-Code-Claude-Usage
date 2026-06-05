@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildStatusText, buildTooltipMarkdown, formatReset, getSessionStart, getWeeklyForecast, makeHtmlBar, utilColor } from "../render";
+import { buildStatusText, buildTooltipMarkdown, formatReset, getSessionStart, getWeeklyForecast, getWeeklyPaceIcon, getWeeklyPaceStatus, makeHtmlBar, utilColor } from "../render";
 import { ColorThresholds, UsageResponse } from "../types";
 
 const thresholds: ColorThresholds = {
@@ -85,6 +85,34 @@ test("getWeeklyForecast stays safe when usage is on pace or zero", () => {
   assert.equal(zero.projectedLimitHitAt, null);
 });
 
+test("getWeeklyPaceStatus classifies projected weekly usage", () => {
+  const base = {
+    weeklyStart: Date.parse("2026-03-16T00:00:00.000Z"),
+    weeklyReset: Date.parse("2026-03-23T00:00:00.000Z"),
+    currentUtilization: 0,
+    projectedLimitHitAt: null,
+  };
+
+  assert.equal(getWeeklyPaceStatus({ ...base, projectedUtilizationAtReset: 94.9 }), "under");
+  assert.equal(getWeeklyPaceStatus({ ...base, projectedUtilizationAtReset: 95 }), "under");
+  assert.equal(getWeeklyPaceStatus({ ...base, projectedUtilizationAtReset: 99.9 }), "on");
+  assert.equal(getWeeklyPaceStatus({ ...base, projectedUtilizationAtReset: 100 }), "on");
+  assert.equal(getWeeklyPaceStatus({ ...base, projectedUtilizationAtReset: 100.1 }), "over");
+});
+
+test("getWeeklyPaceIcon maps weekly pace to status bar arrows", () => {
+  const base = {
+    weeklyStart: Date.parse("2026-03-16T00:00:00.000Z"),
+    weeklyReset: Date.parse("2026-03-23T00:00:00.000Z"),
+    currentUtilization: 0,
+    projectedLimitHitAt: null,
+  };
+
+  assert.equal(getWeeklyPaceIcon({ ...base, projectedUtilizationAtReset: 80 }), "$(arrow-down)");
+  assert.equal(getWeeklyPaceIcon({ ...base, projectedUtilizationAtReset: 98 }), "$(arrow-right)");
+  assert.equal(getWeeklyPaceIcon({ ...base, projectedUtilizationAtReset: 120 }), "$(arrow-up)");
+});
+
 test("buildStatusText shows both session and weekly remaining percentages", () => {
   const usage: UsageResponse = {
     five_hour: { utilization: 18, resets_at: null },
@@ -114,6 +142,30 @@ test("buildStatusText shows remaining % when showUsed is false", () => {
   };
 
   assert.equal(buildStatusText(usage, thresholds, false), "$(pulse) 🟢 S: 82% │ 🟡 W: 38%");
+});
+
+test("buildStatusText appends weekly pace indicator when reset data is available", () => {
+  const usage: UsageResponse = {
+    five_hour: { utilization: 18, resets_at: null },
+    seven_day: { utilization: 40, resets_at: "2026-03-23T00:00:00.000Z" },
+  };
+
+  assert.equal(
+    buildStatusText(usage, thresholds, false, Date.parse("2026-03-18T00:00:00.000Z")),
+    "$(pulse) 🟢 S: 82% │ 🟢 W: 60% $(arrow-up)",
+  );
+});
+
+test("buildStatusText shows under and on-pace weekly indicators", () => {
+  const underPace: UsageResponse = {
+    seven_day: { utilization: 20, resets_at: "2026-03-23T00:00:00.000Z" },
+  };
+  const onPace: UsageResponse = {
+    seven_day: { utilization: 28, resets_at: "2026-03-23T00:00:00.000Z" },
+  };
+
+  assert.equal(buildStatusText(underPace, thresholds, false, Date.parse("2026-03-18T00:00:00.000Z")), "$(pulse) 🟢 W: 80% $(arrow-down)");
+  assert.equal(buildStatusText(onPace, thresholds, false, Date.parse("2026-03-18T00:00:00.000Z")), "$(pulse) 🟢 W: 72% $(arrow-right)");
 });
 
 test("buildTooltipMarkdown renders all enabled sections", () => {
