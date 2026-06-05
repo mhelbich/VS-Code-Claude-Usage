@@ -13,11 +13,20 @@
 <body>
   <div id="controls">
     <div id="range-controls">
-      <button data-range="3600000" class="active">1h</button>
-      <button data-range="21600000">6h</button>
-      <button data-range="86400000">1d</button>
-      <button data-range="604800000">7d</button>
-      <button data-range="2592000000">30d</button>
+      <div class="control-group">
+        <span class="control-label">Focus</span>
+        <button data-view="current-session">Current session</button>
+        <button data-view="current-week">Current week</button>
+        <button data-view="today">Today</button>
+      </div>
+      <div class="control-group">
+        <span class="control-label">Range</span>
+        <button data-view="range:3600000" class="active">1h</button>
+        <button data-view="range:21600000">6h</button>
+        <button data-view="range:86400000">1d</button>
+        <button data-view="range:604800000">7d</button>
+        <button data-view="range:2592000000">30d</button>
+      </div>
     </div>
     <div id="overlay-controls">
       <label><input type="checkbox" data-toggle="showSessionResetMarkers"> Session resets</label>

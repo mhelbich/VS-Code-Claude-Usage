@@ -36,6 +36,23 @@ body {
   align-items: center;
 }
 
+#range-controls {
+  gap: 8px;
+}
+
+.control-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.control-label {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-right: 2px;
+}
+
 button {
   background: var(--btn-bg, var(--vscode-button-secondaryBackground));
   color: var(--btn-fg, var(--vscode-button-secondaryForeground));
@@ -49,6 +66,11 @@ button {
 button.active {
   background: var(--btn-act-bg, var(--vscode-button-background));
   color: var(--btn-act-fg, var(--vscode-button-foreground));
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 #overlay-controls label {

@@ -16,7 +16,7 @@ _Status bar_:
 
 - **Status bar indicator** — shows remaining usage for the current 5-hour session and the 7-day window, color-coded by how much is left
 - **Rich tooltip** — hover to see colored progress bars, exact remaining %, and both relative and absolute reset times
-- **Usage History panel** — a time-series chart in the bottom panel (alongside Terminal/Output) tracking all four usage buckets over time: 5-hour session, 7-day weekly, Opus 7-day, and extra credits. Filter by 1h, 6h, 1d, 7d, or 30d. History is stored locally and retained for a configurable number of days.
+- **Usage History panel** — a time-series chart in the bottom panel (alongside Terminal/Output) tracking all four usage buckets over time: 5-hour session, 7-day weekly, Opus 7-day, and extra credits. Filter by semantic windows like current session, current week, and today, or by fixed ranges like 1h, 6h, 1d, 7d, and 30d. History is stored locally and retained for a configurable number of days.
 - **History overlays** — optional session-start markers, weekly reset markers, and weekly pace / forecast lines in the Usage History chart
 - **Weekly forecast** — a quick projection in both the history panel and tooltip showing whether the current weekly pace looks safe before reset
 - **Customizable thresholds** — configure when the indicator turns yellow or red

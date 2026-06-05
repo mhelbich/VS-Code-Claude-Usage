@@ -26,9 +26,10 @@
     showWeeklyForecast: true,
   };
   let overlayOverrides = {};
-  let activeRangeMs = 3_600_000;
+  let activeView = 'range:3600000';
   const FIVE_HOUR_MS = 5 * 3_600_000;
   const SEVEN_DAY_MS = 7 * 86_400_000;
+  const FALLBACK_VIEW = 'range:3600000';
 
   const DATASETS = [
     { key: 'five_hour',      label: 'Session 5h',    yAxisID: 'yPct',     borderColor: '#4EC9B0', backgroundColor: '#4EC9B022' },
@@ -141,6 +142,31 @@
     return Number.isFinite(parsed) ? parsed : null;
   }
 
+  function findLatestActiveWindow(entries, resetKey, durationMs, now) {
+    for (let i = entries.length - 1; i >= 0; i -= 1) {
+      const resetAt = parseIsoTime(entries[i][resetKey]);
+      if (resetAt === null || resetAt <= now) continue;
+      return { start: resetAt - durationMs, end: resetAt };
+    }
+    return null;
+  }
+
+  function getCurrentSessionWindow(entries, now) {
+    return findLatestActiveWindow(entries, 'five_hour_resets_at', FIVE_HOUR_MS, now);
+  }
+
+  function getCurrentWeekWindow(entries, now) {
+    return findLatestActiveWindow(entries, 'seven_day_resets_at', SEVEN_DAY_MS, now);
+  }
+
+  function getTodayWindow(now) {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return { start: start.getTime(), end: end.getTime() };
+  }
+
   function getEffectiveSetting(key) {
     return overlayOverrides[key] ?? overlayDefaults[key];
   }
@@ -237,6 +263,48 @@
     };
   }
 
+  function getViewport(now) {
+    if (activeView === 'today') {
+      return getTodayWindow(now);
+    }
+    if (activeView === 'current-session') {
+      return getCurrentSessionWindow(allEntries, now) ?? { start: now - 3_600_000, end: now };
+    }
+    if (activeView === 'current-week') {
+      return getCurrentWeekWindow(allEntries, now) ?? { start: now - SEVEN_DAY_MS, end: now };
+    }
+
+    const [, rangeMs] = activeView.split(':');
+    const durationMs = Number(rangeMs);
+    return { start: now - durationMs, end: now };
+  }
+
+  function syncRangeButtons(now) {
+    const availableViews = {
+      'current-session': getCurrentSessionWindow(allEntries, now) !== null,
+      'current-week': getCurrentWeekWindow(allEntries, now) !== null,
+      today: true,
+    };
+
+    if ((activeView === 'current-session' || activeView === 'current-week') && !availableViews[activeView]) {
+      activeView = FALLBACK_VIEW;
+    }
+
+    document.querySelectorAll('#range-controls button[data-view]').forEach(button => {
+      const view = button.dataset.view;
+      const isDisabled = view in availableViews ? !availableViews[view] : false;
+      button.disabled = isDisabled;
+      button.classList.toggle('active', view === activeView);
+      if (view === 'current-session') {
+        button.title = isDisabled ? 'Current session is unavailable until a future session reset is present in history.' : '';
+      } else if (view === 'current-week') {
+        button.title = isDisabled ? 'Current week is unavailable until a future weekly reset is present in history.' : '';
+      } else {
+        button.title = '';
+      }
+    });
+  }
+
   function drawVerticalMarkers(ctx, xScale, chartArea, markers, color, dash) {
     ctx.save();
     ctx.strokeStyle = color;
@@ -272,8 +340,10 @@
 
   function render() {
     const now    = Date.now();
-    const cutoff = now - activeRangeMs;
-    const filtered = allEntries.filter(e => e.timestamp >= cutoff);
+    syncRangeButtons(now);
+
+    const viewport = getViewport(now);
+    const filtered = allEntries.filter(e => e.timestamp >= viewport.start && e.timestamp <= viewport.end);
     const empty    = allEntries.length === 0;
 
     document.getElementById('empty').style.display      = empty ? 'block' : 'none';
@@ -289,8 +359,8 @@
       });
     });
 
-    chart.options.scales.x.min = cutoff;
-    chart.options.scales.x.max = now;
+    chart.options.scales.x.min = viewport.start;
+    chart.options.scales.x.max = viewport.end;
 
     chart.options.scales.yPct.title.text = showUsed ? '% used' : '% remaining';
 
@@ -336,12 +406,11 @@
     summaryEl.classList.toggle('warning', summary.warning);
   }
 
-  document.getElementById('controls').addEventListener('click', e => {
-    const btn = e.target.closest('button[data-range]');
+  document.getElementById('range-controls').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-view]');
     if (!btn) return;
-    document.querySelectorAll('#range-controls button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    activeRangeMs = Number(btn.dataset.range);
+    if (btn.disabled) return;
+    activeView = btn.dataset.view;
     render();
   });
 
