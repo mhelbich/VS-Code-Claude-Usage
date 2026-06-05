@@ -94,6 +94,10 @@ button:disabled {
   opacity: 0.85;
 }
 
+#forecast-summary.safe {
+  color: var(--forecast-safe, #d7a33d);
+}
+
 #forecast-summary.warning {
   color: var(--warn-fg, #f44747);
 }

@@ -9,6 +9,8 @@
   const btnActFg = cs.getPropertyValue('--vscode-button-foreground').trim()          || '#ffffff';
   const panelBg  = cs.getPropertyValue('--vscode-panel-background').trim()           || '#252526';
   const warnFg   = cs.getPropertyValue('--vscode-errorForeground').trim()            || '#f44747';
+  const paceFg   = cs.getPropertyValue('--vscode-descriptionForeground').trim()      || '#9da3ad';
+  const forecastSafeFg = cs.getPropertyValue('--vscode-charts-yellow').trim()        || '#d7a33d';
 
   document.documentElement.style.setProperty('--fg',        fg);
   document.documentElement.style.setProperty('--btn-bg',    btnBg);
@@ -17,6 +19,10 @@
   document.documentElement.style.setProperty('--btn-act-fg', btnActFg);
   document.documentElement.style.setProperty('--panel-bg',   panelBg);
   document.documentElement.style.setProperty('--warn-fg',    warnFg);
+  document.documentElement.style.setProperty('--legend-pace', paceFg);
+  document.documentElement.style.setProperty('--legend-projection', forecastSafeFg);
+  document.documentElement.style.setProperty('--legend-risk', warnFg);
+  document.documentElement.style.setProperty('--forecast-safe', forecastSafeFg);
 
   let allEntries = window.__INITIAL_ENTRIES__ || [];
   let showUsed   = window.__INITIAL_SHOW_USED__ ?? true;
@@ -29,9 +35,10 @@
   let activeView = 'range:3600000';
   const FIVE_HOUR_MS = 5 * 3_600_000;
   const SEVEN_DAY_MS = 7 * 86_400_000;
+  const FORECAST_SAMPLE_STEPS = 24;
   const FALLBACK_VIEW = 'range:3600000';
 
-  const DATASETS = [
+  const BASE_DATASETS = [
     { key: 'five_hour',      label: 'Session 5h',    yAxisID: 'yPct',     borderColor: '#4EC9B0', backgroundColor: '#4EC9B022' },
     { key: 'seven_day',      label: 'Weekly 7d',     yAxisID: 'yPct',     borderColor: '#569CD6', backgroundColor: '#569CD622' },
     { key: 'seven_day_opus', label: 'Opus 7d',       yAxisID: 'yPct',     borderColor: '#C586C0', backgroundColor: '#C586C022' },
@@ -57,13 +64,16 @@
       // Overlays are drawn after the datasets so markers and forecast lines sit on top of the raw history series.
       if (overlayState.showSessionResetMarkers) {
         drawVerticalMarkers(ctx, xScale, chartArea, overlayState.sessionStarts, '#4EC9B088', [4, 4]);
+        drawVerticalMarkers(ctx, xScale, chartArea, overlayState.sessionResets, '#4EC9B0CC', [2, 3]);
       }
       if (overlayState.showWeeklyResetMarkers) {
         drawVerticalMarkers(ctx, xScale, chartArea, overlayState.weeklyResets, '#569CD688', [8, 4]);
       }
       if (overlayState.showWeeklyForecast && overlayState.weeklyForecast) {
-        drawForecastLine(ctx, xScale, yScale, overlayState.weeklyForecast.ideal, '#569CD6BB', [6, 4]);
-        drawForecastLine(ctx, xScale, yScale, overlayState.weeklyForecast.projected, overlayState.weeklyForecast.warning ? '#f44747' : '#4EC9B0', []);
+        drawForecastLabel(ctx, xScale, yScale, chartArea, overlayState.weeklyForecast.projectedEnd, overlayState.weeklyForecast.projectedLabel, overlayState.weeklyForecast.warning ? warnFg : forecastSafeFg);
+        if (overlayState.weeklyForecast.hitPoint) {
+          drawForecastLabel(ctx, xScale, yScale, chartArea, overlayState.weeklyForecast.hitPoint, 'limit hit', warnFg);
+        }
       }
 
       ctx.restore();
@@ -76,17 +86,7 @@
     plugins: [historyOverlayPlugin],
     data: {
       labels: [],
-      datasets: DATASETS.map(d => ({
-        label: d.label,
-        data: [],
-        yAxisID: d.yAxisID,
-        borderColor: d.borderColor,
-        backgroundColor: d.backgroundColor,
-        borderWidth: 1.5,
-        pointRadius: 2,
-        tension: 0.3,
-        fill: false,
-      })),
+      datasets: [],
     },
     options: {
       animation: false,
@@ -122,8 +122,19 @@
         tooltip: {
           mode: 'index',
           intersect: false,
+          filter: (item) => item.dataset.forecastKind !== 'pace' && item.dataset.forecastKind !== 'projection',
           callbacks: {
             title: (items) => items.length ? formatTs(items[0].parsed.x) : '',
+            label: (item) => {
+              const kind = item.dataset.forecastKind;
+              if (kind === 'hit') {
+                return `Projected early limit hit: ${item.parsed.y.toFixed(1)}% ${showUsed ? 'used' : 'remaining'}`;
+              }
+              if (item.dataset.yAxisID === 'yCredits') {
+                return `${item.dataset.label}: ${item.parsed.y}`;
+              }
+              return `${item.dataset.label}: ${item.parsed.y.toFixed(1)}% ${showUsed ? 'used' : 'remaining'}`;
+            },
           },
         },
       },
@@ -263,6 +274,107 @@
     };
   }
 
+  function sampleLinePoints(x1, y1, x2, y2, steps = FORECAST_SAMPLE_STEPS) {
+    const points = [];
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      points.push({
+        x: x1 + (x2 - x1) * t,
+        y: y1 + (y2 - y1) * t,
+      });
+    }
+    return points;
+  }
+
+  function buildBaseDatasets(entries) {
+    return BASE_DATASETS.map(d => ({
+      label: d.label,
+      data: entries.map(e => {
+        const v = e[d.key];
+        const y = (d.yAxisID === 'yPct' && v !== null) ? (showUsed ? v : 100 - v) : v;
+        return { x: e.timestamp, y };
+      }),
+      yAxisID: d.yAxisID,
+      borderColor: d.borderColor,
+      backgroundColor: d.backgroundColor,
+      borderWidth: 1.5,
+      pointRadius: 2,
+      tension: 0.3,
+      fill: false,
+      order: 10,
+    }));
+  }
+
+  function buildForecastDatasets(forecast) {
+    if (!forecast) return [];
+
+    const projectionColor = forecast.projectedHitAt !== null ? warnFg : forecastSafeFg;
+    const idealData = sampleLinePoints(
+      forecast.weeklyStart,
+      toDisplayPct(0),
+      forecast.weeklyReset,
+      toDisplayPct(100),
+    );
+    const projectionData = sampleLinePoints(
+      forecast.weeklyStart,
+      toDisplayPct(0),
+      forecast.weeklyReset,
+      toDisplayPct(forecast.projectedUsedAtReset),
+    );
+
+    const datasets = [
+      {
+        label: 'Ideal weekly pace',
+        data: idealData,
+        yAxisID: 'yPct',
+        borderColor: paceFg,
+        backgroundColor: paceFg,
+        borderWidth: 1.5,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        pointHitRadius: 6,
+        tension: 0,
+        fill: false,
+        order: 90,
+        forecastKind: 'pace',
+      },
+      {
+        label: 'Weekly projection',
+        data: projectionData,
+        yAxisID: 'yPct',
+        borderColor: projectionColor,
+        backgroundColor: projectionColor,
+        borderWidth: 2,
+        pointRadius: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? 3.5 : 0,
+        pointHoverRadius: (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1 ? 5 : 0,
+        pointHitRadius: 6,
+        tension: 0,
+        fill: false,
+        order: 91,
+        forecastKind: 'projection',
+      },
+    ];
+
+    if (forecast.projectedHitAt !== null) {
+      datasets.push({
+        label: 'Projected early limit hit',
+        data: [{ x: forecast.projectedHitAt, y: toDisplayPct(100) }],
+        yAxisID: 'yPct',
+        showLine: false,
+        borderColor: warnFg,
+        backgroundColor: warnFg,
+        pointRadius: 4,
+        pointHoverRadius: 5,
+        pointHitRadius: 8,
+        order: 92,
+        forecastKind: 'hit',
+      });
+    }
+
+    return datasets;
+  }
+
   function getViewport(now) {
     if (activeView === 'today') {
       return getTodayWindow(now);
@@ -321,20 +433,19 @@
     ctx.restore();
   }
 
-  function drawForecastLine(ctx, xScale, yScale, line, color, dash) {
-    const startX = xScale.getPixelForValue(line.x1);
-    const endX = xScale.getPixelForValue(line.x2);
-    const startY = yScale.getPixelForValue(line.y1);
-    const endY = yScale.getPixelForValue(line.y2);
+  function drawForecastLabel(ctx, xScale, yScale, chartArea, point, label, color) {
+    const x = xScale.getPixelForValue(point.x);
+    const y = yScale.getPixelForValue(point.y);
+    const offsetX = x > chartArea.left + (chartArea.right - chartArea.left) * 0.7 ? -6 : 6;
+    const align = offsetX < 0 ? 'right' : 'left';
+    const labelY = Math.max(chartArea.top + 10, Math.min(chartArea.bottom - 6, y - 8));
 
     ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.setLineDash(dash);
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(endX, endY);
-    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = align;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x + offsetX, labelY);
     ctx.restore();
   }
 
@@ -350,15 +461,6 @@
     document.getElementById('chart-wrap').style.display = empty ? 'none'  : 'block';
     document.getElementById('controls').style.display   = empty ? 'none'  : 'flex';
 
-    chart.data.labels = [];
-    DATASETS.forEach((d, i) => {
-      chart.data.datasets[i].data = filtered.map(e => {
-        const v = e[d.key];
-        const y = (d.yAxisID === 'yPct' && v !== null) ? (showUsed ? v : 100 - v) : v;
-        return { x: e.timestamp, y };
-      });
-    });
-
     chart.options.scales.x.min = viewport.start;
     chart.options.scales.x.max = viewport.end;
 
@@ -368,30 +470,38 @@
     if (latestLimit != null) chart.options.scales.yCredits.max = latestLimit;
 
     const weeklyForecast = getWeeklyForecast(allEntries, now);
+    const showWeeklyForecast = getEffectiveSetting('showWeeklyForecast');
+    chart.data.labels = [];
+    chart.data.datasets = [
+      ...buildBaseDatasets(filtered),
+      ...buildForecastDatasets(showWeeklyForecast ? weeklyForecast : null),
+    ];
     chart.options.plugins.historyOverlays = {
       showSessionResetMarkers: getEffectiveSetting('showSessionResetMarkers'),
       showWeeklyResetMarkers: getEffectiveSetting('showWeeklyResetMarkers'),
-      showWeeklyForecast: getEffectiveSetting('showWeeklyForecast'),
+      showWeeklyForecast,
       sessionStarts: getDistinctMarkers(allEntries, entry => {
         const resetAt = parseIsoTime(entry.five_hour_resets_at);
         return resetAt === null ? null : resetAt - FIVE_HOUR_MS;
       }),
+      sessionResets: getDistinctMarkers(allEntries, entry => parseIsoTime(entry.five_hour_resets_at)),
       weeklyResets: getDistinctMarkers(allEntries, entry => parseIsoTime(entry.seven_day_resets_at)),
-      weeklyForecast: weeklyForecast
+      weeklyForecast: showWeeklyForecast && weeklyForecast
         ? {
             warning: weeklyForecast.projectedHitAt !== null,
-            ideal: {
-              x1: weeklyForecast.weeklyStart,
-              y1: toDisplayPct(0),
-              x2: weeklyForecast.weeklyReset,
-              y2: toDisplayPct(100),
+            projectedEnd: {
+              x: weeklyForecast.weeklyReset,
+              y: toDisplayPct(weeklyForecast.projectedUsedAtReset),
             },
-            projected: {
-              x1: weeklyForecast.weeklyStart,
-              y1: toDisplayPct(0),
-              x2: weeklyForecast.weeklyReset,
-              y2: toDisplayPct(weeklyForecast.projectedUsedAtReset),
-            },
+            projectedLabel: showUsed
+              ? `${Math.max(0, weeklyForecast.projectedUsedAtReset).toFixed(0)}% used`
+              : `${Math.max(0, 100 - weeklyForecast.projectedUsedAtReset).toFixed(0)}% left`,
+            hitPoint: weeklyForecast.projectedHitAt !== null
+              ? {
+                  x: weeklyForecast.projectedHitAt,
+                  y: toDisplayPct(100),
+                }
+              : null,
           }
         : null,
     };
@@ -403,6 +513,7 @@
     const summary = buildForecastSummary(weeklyForecast, now);
     const summaryEl = document.getElementById('forecast-summary');
     summaryEl.textContent = summary.text;
+    summaryEl.classList.toggle('safe', !summary.warning && weeklyForecast !== null);
     summaryEl.classList.toggle('warning', summary.warning);
   }
 
