@@ -47,6 +47,31 @@
 
   const historyOverlayPlugin = {
     id: 'historyOverlays',
+    afterEvent(chart, args) {
+      const xScale = chart.scales.x;
+      const eventX = args.event?.x;
+      if (!xScale || typeof eventX !== 'number') return;
+
+      const latestRealX = chart.data.datasets
+        .filter(dataset => !dataset.forecastKind)
+        .flatMap(dataset => dataset.data)
+        .reduce((latest, point) => {
+          if (!point || typeof point.x !== 'number' || point.y == null) return latest;
+          return Math.max(latest, point.x);
+        }, Number.NEGATIVE_INFINITY);
+
+      if (!Number.isFinite(latestRealX) || eventX <= xScale.getPixelForValue(latestRealX)) return;
+
+      const active = chart.getActiveElements();
+      const includesHitPoint = active.some(item => chart.data.datasets[item.datasetIndex]?.forecastKind === 'hit');
+
+      // Suppress tooltip snapping in future blank space, but still allow the explicit red projected-hit marker to hover.
+      if (!includesHitPoint) {
+        chart.setActiveElements([]);
+        chart.tooltip?.setActiveElements([], { x: 0, y: 0 });
+        args.changed = true;
+      }
+    },
     afterDatasetsDraw(chart) {
       const overlayState = chart.options.plugins.historyOverlays;
       if (!overlayState) return;
