@@ -11,6 +11,9 @@ export interface ClaudeUsageConfiguration {
   dangerThreshold: number;
   showUsed: boolean;
   historyRetentionDays: number;
+  showSessionResetMarkers: boolean;
+  showWeeklyResetMarkers: boolean;
+  showWeeklyForecast: boolean;
 }
 export type ClaudeUsageConfigKey = keyof ClaudeUsageConfiguration;
 
@@ -23,6 +26,9 @@ export const CONFIG_DEFAULTS: ClaudeUsageConfiguration = {
   dangerThreshold: 90,
   showUsed: false,
   historyRetentionDays: 30,
+  showSessionResetMarkers: true,
+  showWeeklyResetMarkers: true,
+  showWeeklyForecast: true,
 };
 
 /**
@@ -34,6 +40,9 @@ export const CONFIG_KEYS = {
   dangerThreshold: "dangerThreshold",
   showUsed: "showUsed",
   historyRetentionDays: "historyRetentionDays",
+  showSessionResetMarkers: "showSessionResetMarkers",
+  showWeeklyResetMarkers: "showWeeklyResetMarkers",
+  showWeeklyForecast: "showWeeklyForecast",
 } as const satisfies Record<ClaudeUsageConfigKey, ClaudeUsageConfigKey>;
 
 /**
@@ -45,6 +54,9 @@ export const CONFIG_PATHS = {
   dangerThreshold: `${CONFIG_SECTION}.${CONFIG_KEYS.dangerThreshold}`,
   showUsed: `${CONFIG_SECTION}.${CONFIG_KEYS.showUsed}`,
   historyRetentionDays: `${CONFIG_SECTION}.${CONFIG_KEYS.historyRetentionDays}`,
+  showSessionResetMarkers: `${CONFIG_SECTION}.${CONFIG_KEYS.showSessionResetMarkers}`,
+  showWeeklyResetMarkers: `${CONFIG_SECTION}.${CONFIG_KEYS.showWeeklyResetMarkers}`,
+  showWeeklyForecast: `${CONFIG_SECTION}.${CONFIG_KEYS.showWeeklyForecast}`,
 } as const satisfies Record<ClaudeUsageConfigKey, `${typeof CONFIG_SECTION}.${ClaudeUsageConfigKey}`>;
 
 /**

@@ -21,9 +21,19 @@ body {
 
 #controls {
   display: flex;
-  gap: 4px;
+  gap: 8px;
   margin-bottom: 8px;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#range-controls,
+#overlay-controls {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 button {
@@ -39,6 +49,31 @@ button {
 button.active {
   background: var(--btn-act-bg, var(--vscode-button-background));
   color: var(--btn-act-fg, var(--vscode-button-foreground));
+}
+
+#overlay-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 2px;
+  background: var(--btn-bg, var(--vscode-button-secondaryBackground));
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#overlay-controls input {
+  margin: 0;
+}
+
+#forecast-summary {
+  margin-bottom: 8px;
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+#forecast-summary.warning {
+  color: var(--warn-fg, #f44747);
 }
 
 #chart-wrap {

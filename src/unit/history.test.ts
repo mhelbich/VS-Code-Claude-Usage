@@ -7,7 +7,9 @@ import type { HistoryEntry } from "../types.js";
 const sample: HistoryEntry = {
   timestamp: 1_000_000,
   five_hour: 42,
+  five_hour_resets_at: "2026-03-16T12:00:00.000Z",
   seven_day: 10,
+  seven_day_resets_at: "2026-03-20T12:00:00.000Z",
   seven_day_opus: 5,
   extra_used: 20,
   extra_limit: 500,

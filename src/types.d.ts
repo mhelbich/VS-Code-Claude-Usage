@@ -23,7 +23,9 @@ export interface UsageResponse {
 export interface HistoryEntry {
   timestamp: number;         // ms since epoch (Date.now())
   five_hour: number | null;  // utilization % (0–100), null if bucket absent
+  five_hour_resets_at?: string | null;
   seven_day: number | null;
+  seven_day_resets_at?: string | null;
   seven_day_opus: number | null;
   extra_used: number | null; // raw credits used
   extra_limit: number | null; // raw credits limit (monthly)

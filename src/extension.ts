@@ -44,10 +44,21 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   let state: State = { kind: "loading" };
 
+  function getHistoryViewSettings() {
+    // Keep persisted defaults in one place; the webview can still override them locally per session.
+    return {
+      showSessionResetMarkers: getClaudeUsageSetting("showSessionResetMarkers"),
+      showWeeklyResetMarkers: getClaudeUsageSetting("showWeeklyResetMarkers"),
+      showWeeklyForecast: getClaudeUsageSetting("showWeeklyForecast"),
+    };
+  }
+
   function dispatch(action: Action): void {
     state = reduce(state, action);
     applyProps(stateToBarProps(state, getClaudeUsageSetting("showUsed")), bar);
   }
+
+  historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings());
 
   let timer: ReturnType<typeof setInterval> | undefined;
   ctx.subscriptions.push(
@@ -93,13 +104,16 @@ export function activate(ctx: vscode.ExtensionContext) {
       const entry: HistoryEntry = {
         timestamp: Date.now(),
         five_hour: usage.five_hour?.utilization ?? null,
+        five_hour_resets_at: usage.five_hour?.resets_at ?? null,
         seven_day: usage.seven_day?.utilization ?? null,
+        seven_day_resets_at: usage.seven_day?.resets_at ?? null,
         seven_day_opus: usage.seven_day_opus?.utilization ?? null,
         extra_used: usage.extra_usage?.used_credits ?? null,
         extra_limit: usage.extra_usage?.monthly_limit ?? null,
       };
+      // Persist reset metadata alongside utilization so the history view can derive markers and forecasts later.
       historyStore.append(entry);
-      historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"));
+      historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings());
       dispatch({
         type: "fetch-success",
         usage,
@@ -142,13 +156,18 @@ export function activate(ctx: vscode.ExtensionContext) {
       }
       if (e.affectsConfiguration(CONFIG_PATHS.historyRetentionDays)) {
         log.info(`History retention updated — ${getClaudeUsageSetting("historyRetentionDays")} days`);
-        historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"));
+        historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings());
       }
-      if (e.affectsConfiguration(CONFIG_PATHS.showUsed)) {
+      if (
+        e.affectsConfiguration(CONFIG_PATHS.showUsed) ||
+        e.affectsConfiguration(CONFIG_PATHS.showSessionResetMarkers) ||
+        e.affectsConfiguration(CONFIG_PATHS.showWeeklyResetMarkers) ||
+        e.affectsConfiguration(CONFIG_PATHS.showWeeklyForecast)
+      ) {
         const showUsed = getClaudeUsageSetting("showUsed");
-        log.info(`Display mode updated — showUsed: ${showUsed}`);
+        log.info(`Display settings updated — showUsed: ${showUsed}`);
         applyProps(stateToBarProps(state, showUsed), bar);
-        historyProvider.refresh(historyStore.read(), showUsed);
+        historyProvider.refresh(historyStore.read(), showUsed, getHistoryViewSettings());
       }
     }),
   );

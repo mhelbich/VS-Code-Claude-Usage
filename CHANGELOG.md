@@ -2,6 +2,14 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [Unreleased]
+
+### Added
+
+- Usage History overlays for session starts, weekly resets, and weekly pace / forecast lines
+- Weekly forecast summaries in both the history panel and the status bar tooltip
+- New settings to control the history overlays by default
+
 ## [0.2.8] - 2026-06-03
 
 ### Fixed

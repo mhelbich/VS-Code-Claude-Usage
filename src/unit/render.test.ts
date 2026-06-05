@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildStatusText, buildTooltipMarkdown, formatReset, makeHtmlBar, utilColor } from "../render";
+import { buildStatusText, buildTooltipMarkdown, formatReset, getSessionStart, getWeeklyForecast, makeHtmlBar, utilColor } from "../render";
 import { ColorThresholds, UsageResponse } from "../types";
 
 const thresholds: ColorThresholds = {
@@ -33,6 +33,56 @@ test("formatReset handles missing, past, and future reset times", () => {
     }),
     "2h 30m (Mon, Mar 16, 12:30 PM)",
   );
+});
+
+test("getSessionStart derives the five-hour window start from the reset time", () => {
+  assert.equal(getSessionStart("2026-03-16T12:00:00.000Z"), Date.parse("2026-03-16T07:00:00.000Z"));
+  assert.equal(getSessionStart(null), null);
+});
+
+test("getWeeklyForecast returns null when weekly reset data is unavailable", () => {
+  assert.equal(getWeeklyForecast({}), null);
+  assert.equal(getWeeklyForecast({ seven_day: { utilization: 25, resets_at: null } }), null);
+});
+
+test("getWeeklyForecast projects the weekly end utilization and hit time", () => {
+  const forecast = getWeeklyForecast(
+    {
+      seven_day: { utilization: 40, resets_at: "2026-03-23T00:00:00.000Z" },
+    },
+    Date.parse("2026-03-18T00:00:00.000Z"),
+  );
+
+  assert.ok(forecast);
+  assert.equal(forecast.weeklyStart, Date.parse("2026-03-16T00:00:00.000Z"));
+  assert.equal(forecast.weeklyReset, Date.parse("2026-03-23T00:00:00.000Z"));
+  assert.equal(forecast.currentUtilization, 40);
+  assert.equal(forecast.projectedUtilizationAtReset, 140);
+  assert.equal(forecast.projectedLimitHitAt, Date.parse("2026-03-21T00:00:00.000Z"));
+});
+
+test("getWeeklyForecast stays safe when usage is on pace or zero", () => {
+  const onPace = getWeeklyForecast(
+    {
+      seven_day: { utilization: 50, resets_at: "2026-03-23T00:00:00.000Z" },
+    },
+    Date.parse("2026-03-19T12:00:00.000Z"),
+  );
+
+  assert.ok(onPace);
+  assert.equal(onPace.projectedUtilizationAtReset, 100);
+  assert.equal(onPace.projectedLimitHitAt, null);
+
+  const zero = getWeeklyForecast(
+    {
+      seven_day: { utilization: 0, resets_at: "2026-03-23T00:00:00.000Z" },
+    },
+    Date.parse("2026-03-18T00:00:00.000Z"),
+  );
+
+  assert.ok(zero);
+  assert.equal(zero.projectedUtilizationAtReset, 0);
+  assert.equal(zero.projectedLimitHitAt, null);
 });
 
 test("buildStatusText shows both session and weekly remaining percentages", () => {
@@ -90,6 +140,7 @@ test("buildTooltipMarkdown renders all enabled sections", () => {
   assert.match(tooltip, /\*\*Opus \(7d\)\*\*/);
   assert.match(tooltip, /\*\*Extra usage:\*\* 25 \/ 100 credits/);
   assert.match(tooltip, /Resets in 2h 30m \(2026-03-16T12:30:00.000Z\)/);
+  assert.match(tooltip, /Forecast: Projected weekly remaining at reset: 1\.8%/);
   assert.match(tooltip, /Click to refresh/);
 });
 
@@ -102,13 +153,17 @@ test("buildTooltipMarkdown shows disabled extra usage when not enabled", () => {
 test("buildTooltipMarkdown shows used % and 'used' label when showUsed is true", () => {
   const usage: UsageResponse = {
     five_hour: { utilization: 25, resets_at: null },
-    seven_day: { utilization: 70, resets_at: null },
+    seven_day: { utilization: 70, resets_at: "2026-03-18T10:15:00.000Z" },
   };
 
-  const tooltip = buildTooltipMarkdown(usage, thresholds, undefined, true);
+  const tooltip = buildTooltipMarkdown(usage, thresholds, {
+    now: Date.parse("2026-03-16T10:00:00.000Z"),
+    formatAbsolute: (date) => date.toISOString(),
+  }, true);
 
   assert.match(tooltip, /\*\*25\.0%\*\* used/);
   assert.match(tooltip, /\*\*70\.0%\*\* used/);
+  assert.match(tooltip, /Forecast: Projected weekly usage at reset: 98\.2%/);
   assert.doesNotMatch(tooltip, /remaining/);
 });
 
@@ -132,12 +187,32 @@ test("buildTooltipMarkdown inverts html bar when showUsed is true", () => {
 test("buildTooltipMarkdown shows remaining % and 'remaining' label when showUsed is false", () => {
   const usage: UsageResponse = {
     five_hour: { utilization: 25, resets_at: null },
-    seven_day: { utilization: 70, resets_at: null },
+    seven_day: { utilization: 70, resets_at: "2026-03-18T10:15:00.000Z" },
   };
 
-  const tooltip = buildTooltipMarkdown(usage, thresholds, undefined, false);
+  const tooltip = buildTooltipMarkdown(usage, thresholds, {
+    now: Date.parse("2026-03-16T10:00:00.000Z"),
+    formatAbsolute: (date) => date.toISOString(),
+  }, false);
 
   assert.match(tooltip, /\*\*75\.0%\*\* remaining/);
   assert.match(tooltip, /\*\*30\.0%\*\* remaining/);
+  assert.match(tooltip, /Forecast: Projected weekly remaining at reset: 1\.8%/);
   assert.doesNotMatch(tooltip, / used/);
+});
+
+test("buildTooltipMarkdown warns when the weekly limit projects to hit before reset", () => {
+  const tooltip = buildTooltipMarkdown(
+    {
+      seven_day: { utilization: 45, resets_at: "2026-03-23T00:00:00.000Z" },
+    },
+    thresholds,
+    {
+      now: Date.parse("2026-03-18T00:00:00.000Z"),
+      formatAbsolute: (date) => date.toISOString(),
+    },
+    false,
+  );
+
+  assert.match(tooltip, /Forecast: At current pace, weekly remaining projects to reach 0 in 58h 40m \(2026-03-20T10:40:00.000Z\) before reset\./);
 });

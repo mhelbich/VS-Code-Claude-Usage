@@ -3,11 +3,22 @@ import * as vscode from "vscode";
 import type { HistoryEntry } from "./types.js";
 import type { HistoryStore } from "./history.js";
 
+export interface HistoryViewSettings {
+  showSessionResetMarkers: boolean;
+  showWeeklyResetMarkers: boolean;
+  showWeeklyForecast: boolean;
+}
+
 export class UsageHistoryProvider implements vscode.WebviewViewProvider {
   static readonly viewId = "claudeUsage.historyView";
 
   private _view: vscode.WebviewView | undefined;
   private _showUsed = false;
+  private _settings: HistoryViewSettings = {
+    showSessionResetMarkers: true,
+    showWeeklyResetMarkers: true,
+    showWeeklyForecast: true,
+  };
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -17,22 +28,24 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
   resolveWebviewView(view: vscode.WebviewView): void {
     this._view = view;
     view.webview.options = { enableScripts: true, localResourceRoots: [this.extensionUri] };
-    view.webview.html = this._buildHtml(view.webview, this.store.read(), this._showUsed);
+    view.webview.html = this._buildHtml(view.webview, this.store.read(), this._showUsed, this._settings);
     view.webview.onDidReceiveMessage((msg) => {
       if (msg?.type === "ready") {
-        view.webview.postMessage({ type: "data", entries: this.store.read(), showUsed: this._showUsed });
+        // Re-send the current payload after the webview scripts are live to avoid dropped early messages.
+        view.webview.postMessage({ type: "data", entries: this.store.read(), showUsed: this._showUsed, settings: this._settings });
       }
     });
   }
 
-  refresh(entries: HistoryEntry[], showUsed: boolean): void {
+  refresh(entries: HistoryEntry[], showUsed: boolean, settings: HistoryViewSettings): void {
     this._showUsed = showUsed;
+    this._settings = settings;
     if (this._view?.visible) {
-      this._view.webview.postMessage({ type: "data", entries, showUsed });
+      this._view.webview.postMessage({ type: "data", entries, showUsed, settings });
     }
   }
 
-  private _buildHtml(webview: vscode.Webview, entries: HistoryEntry[], showUsed: boolean): string {
+  private _buildHtml(webview: vscode.Webview, entries: HistoryEntry[], showUsed: boolean, settings: HistoryViewSettings): string {
     const mediaUri = (file: string) => webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "history-view", file));
 
     const nonce = getNonce();
@@ -45,7 +58,8 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
       .replaceAll("{{CHART_URI}}", mediaUri("chart.umd.js").toString())
       .replaceAll("{{JS_URI}}", mediaUri("webview.js").toString())
       .replaceAll("{{INITIAL_ENTRIES}}", JSON.stringify(entries))
-      .replaceAll("{{INITIAL_SHOW_USED}}", JSON.stringify(showUsed));
+      .replaceAll("{{INITIAL_SHOW_USED}}", JSON.stringify(showUsed))
+      .replaceAll("{{INITIAL_SETTINGS}}", JSON.stringify(settings));
   }
 }
 

@@ -12,12 +12,20 @@
 
 <body>
   <div id="controls">
-    <button data-range="3600000" class="active">1h</button>
-    <button data-range="21600000">6h</button>
-    <button data-range="86400000">1d</button>
-    <button data-range="604800000">7d</button>
-    <button data-range="2592000000">30d</button>
+    <div id="range-controls">
+      <button data-range="3600000" class="active">1h</button>
+      <button data-range="21600000">6h</button>
+      <button data-range="86400000">1d</button>
+      <button data-range="604800000">7d</button>
+      <button data-range="2592000000">30d</button>
+    </div>
+    <div id="overlay-controls">
+      <label><input type="checkbox" data-toggle="showSessionResetMarkers"> Session resets</label>
+      <label><input type="checkbox" data-toggle="showWeeklyResetMarkers"> Weekly resets</label>
+      <label><input type="checkbox" data-toggle="showWeeklyForecast"> Weekly forecast</label>
+    </div>
   </div>
+  <div id="forecast-summary">Weekly forecast: —</div>
   <div id="empty">No data yet — usage will appear after the first refresh.</div>
   <div id="chart-wrap"><canvas id="chart"></canvas></div>
   <div id="footer">Last updated: <span id="last-updated">—</span></div>
@@ -25,6 +33,7 @@
   <script nonce="{{NONCE}}">
     window.__INITIAL_ENTRIES__ = {{INITIAL_ENTRIES}};
     window.__INITIAL_SHOW_USED__ = {{INITIAL_SHOW_USED}};
+    window.__INITIAL_SETTINGS__ = {{INITIAL_SETTINGS}};
   </script>
   <script nonce="{{NONCE}}" src="{{CHART_URI}}"></script>
   <script nonce="{{NONCE}}" src="{{JS_URI}}"></script>

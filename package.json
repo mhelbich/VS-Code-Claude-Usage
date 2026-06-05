@@ -93,6 +93,24 @@
           "minimum": 1,
           "description": "Number of days of usage history to retain.",
           "order": 5
+        },
+        "claudeUsage.showSessionResetMarkers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show session start markers in the Usage History chart.",
+          "order": 6
+        },
+        "claudeUsage.showWeeklyResetMarkers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show weekly reset markers in the Usage History chart.",
+          "order": 7
+        },
+        "claudeUsage.showWeeklyForecast": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show weekly pace and forecast overlays in the Usage History chart.",
+          "order": 8
         }
       }
     }
