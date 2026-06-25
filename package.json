@@ -137,7 +137,7 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.20.0",
     "@types/vscode": "1.85.0",
-    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.0.0",
     "@vscode/vsce": "^3.9.2",
     "chart.js": "^4.5.1",
