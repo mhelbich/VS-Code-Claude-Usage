@@ -2,7 +2,7 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
-## [Unreleased]
+## [0.3.0] - 2026-06-25
 
 ### Added
 
@@ -15,6 +15,12 @@ All notable changes to the **Claude Code Usage Status** extension will be docume
 ### Fixed
 
 - History chart reset lines are now broken at session and weekly reset boundaries instead of drawing a diagonal line back up to 100% across the chart; idle periods between sessions are hidden to reduce noise
+- History panel no longer causes a vertical scroll — the chart now uses flex layout to fill the available height dynamically, so the added weekly forecast summary row no longer pushes the panel past 100vh
+- Tooltip position and data are now correct — replaced the built-in `index` interaction mode with a custom per-dataset nearest-x lookup so forecast lines (25 sample points) no longer corrupt the array-index lookup into session data (100+ points); a `clampedAverage` positioner additionally prevents off-canvas forecast points from pulling the tooltip toward the left edge
+
+### Maintenance
+
+- Bumped dev toolchain (`@vscode/test-cli`, `@vscode/test-electron`, `@vscode/vsce`, `@types/node`) and GitHub Actions; updated transitive deps (`undici`, `markdown-it`, `form-data`, `js-yaml`)
 
 ## [0.2.8] - 2026-06-03
 
