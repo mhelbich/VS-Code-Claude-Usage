@@ -48,10 +48,10 @@
   }
 
   const BASE_DATASETS = [
-    { key: 'five_hour',      label: 'Session 5h',    yAxisID: 'yPct',     borderColor: '#4EC9B0', backgroundColor: '#4EC9B022' },
-    { key: 'seven_day',      label: 'Weekly 7d',     yAxisID: 'yPct',     borderColor: '#569CD6', backgroundColor: '#569CD622' },
-    { key: 'seven_day_opus', label: 'Opus 7d',       yAxisID: 'yPct',     borderColor: '#C586C0', backgroundColor: '#C586C022' },
-    { key: 'extra_used',     label: 'Extra credits', yAxisID: 'yCredits', borderColor: '#CE9178', backgroundColor: '#CE917822' },
+    { key: 'five_hour',      resetKey: 'five_hour_resets_at', label: 'Session 5h',    yAxisID: 'yPct',     borderColor: '#4EC9B0', backgroundColor: '#4EC9B022' },
+    { key: 'seven_day',      resetKey: 'seven_day_resets_at', label: 'Weekly 7d',     yAxisID: 'yPct',     borderColor: '#569CD6', backgroundColor: '#569CD622' },
+    { key: 'seven_day_opus', resetKey: 'seven_day_resets_at', label: 'Opus 7d',       yAxisID: 'yPct',     borderColor: '#C586C0', backgroundColor: '#C586C022' },
+    { key: 'extra_used',     resetKey: null,                  label: 'Extra credits', yAxisID: 'yCredits', borderColor: '#CE9178', backgroundColor: '#CE917822' },
   ];
 
   const historyOverlayPlugin = {
@@ -321,22 +321,45 @@
   }
 
   function buildBaseDatasets(entries) {
-    return BASE_DATASETS.map(d => ({
-      label: d.label,
-      data: entries.map(e => {
+    return BASE_DATASETS.map(d => {
+      const data = [];
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        if (d.resetKey && i > 0) {
+          const prevReset = parseIsoTime(entries[i - 1][d.resetKey]);
+          const currReset = parseIsoTime(e[d.resetKey]);
+          // API returns slightly varying sub-second precision for the same reset time; compare at second granularity.
+          if (prevReset !== null && currReset !== null && Math.floor(prevReset / 1000) !== Math.floor(currReset / 1000)) {
+            data.push({ x: prevReset, y: null });
+          }
+        }
         const v = e[d.key];
-        const y = (d.yAxisID === 'yPct' && v !== null) ? (showUsed ? v : 100 - v) : v;
-        return { x: e.timestamp, y };
-      }),
-      yAxisID: d.yAxisID,
-      borderColor: d.borderColor,
-      backgroundColor: d.backgroundColor,
-      borderWidth: 1.5,
-      pointRadius: 2,
-      tension: 0.3,
-      fill: false,
-      order: 10,
-    }));
+        // resets_at is null when no session is active (between sessions); hide those points.
+        const noActiveWindow = d.resetKey && e[d.resetKey] === null;
+        let y;
+        if (noActiveWindow) {
+          y = null;
+        } else if (d.yAxisID === 'yPct' && v !== null) {
+          y = showUsed ? v : 100 - v;
+        } else {
+          y = v;
+        }
+        data.push({ x: e.timestamp, y });
+      }
+      return {
+        label: d.label,
+        data,
+        yAxisID: d.yAxisID,
+        borderColor: d.borderColor,
+        backgroundColor: d.backgroundColor,
+        borderWidth: 1.5,
+        pointRadius: 2,
+        tension: 0.3,
+        fill: false,
+        spanGaps: false,
+        order: 10,
+      };
+    });
   }
 
   function buildForecastDatasets(forecast) {
