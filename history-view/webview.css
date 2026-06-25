@@ -10,6 +10,10 @@ body {
   color: var(--fg, var(--vscode-foreground));
   background: var(--panel-bg, var(--vscode-sideBar-background));
   padding: 8px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
 #empty {
@@ -104,7 +108,7 @@ button:disabled {
 
 #chart-wrap {
   position: relative;
-  height: calc(100vh - 80px);
+  flex: 1;
   min-height: 160px;
 }
 

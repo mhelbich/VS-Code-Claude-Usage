@@ -1,3 +1,4 @@
+/* global Chart */
 (function () {
   // Resolve VS Code CSS variables into concrete values for Chart.js (canvas ignores CSS vars)
   const cs = getComputedStyle(document.documentElement);
@@ -71,15 +72,10 @@
 
       if (!Number.isFinite(latestRealX) || eventX <= xScale.getPixelForValue(latestRealX)) return;
 
-      const active = chart.getActiveElements();
-      const includesHitPoint = active.some(item => chart.data.datasets[item.datasetIndex]?.forecastKind === 'hit');
-
-      // Suppress tooltip snapping in future blank space, but still allow the explicit red projected-hit marker to hover.
-      if (!includesHitPoint) {
-        chart.setActiveElements([]);
-        chart.tooltip?.setActiveElements([], { x: 0, y: 0 });
-        args.changed = true;
-      }
+      // Suppress tooltip snapping in future blank space.
+      chart.setActiveElements([]);
+      chart.tooltip?.setActiveElements([], { x: 0, y: 0 });
+      args.changed = true;
     },
     afterDatasetsDraw(chart) {
       const overlayState = chart.options.plugins.historyOverlays;
@@ -112,6 +108,47 @@
 
       ctx.restore();
     },
+  };
+
+  // Custom interaction mode: for each base (non-forecast) dataset find the element
+  // nearest to the cursor x-position independently. The built-in 'index' mode finds
+  // the globally-nearest element and then looks up that ARRAY INDEX in every other
+  // dataset, which goes wrong when datasets have different lengths (e.g., forecast
+  // lines have only 25 sampled points while session data has 100+, so forecast
+  // index 22 maps to a completely different timestamp in the session dataset).
+  Chart.Interaction.modes.nearestPerDataset = function(chart, e, _options, useFinalPosition) {
+    if (e.x === null) return [];
+    const cursorX = e.x;
+    const items = [];
+    chart.getSortedVisibleDatasetMetas().forEach(meta => {
+      if (chart.data.datasets[meta.index]?.forecastKind) return;
+      let minDist = Infinity;
+      let best = null;
+      meta.data.forEach((element, index) => {
+        if (!element || element.skip) return;
+        const center = element.getCenterPoint(useFinalPosition);
+        if (!Number.isFinite(center.y)) return;
+        const dist = Math.abs(center.x - cursorX);
+        if (dist < minDist) { minDist = dist; best = { element, datasetIndex: meta.index, index }; }
+      });
+      if (best) items.push(best);
+    });
+    return items;
+  };
+
+  // Tooltip positioner that averages only elements whose canvas x falls inside the
+  // chart area, as a safety net against off-canvas points skewing the position.
+  Chart.Tooltip.positioners.clampedAverage = function(items) {
+    const { left, right } = this.chart.chartArea;
+    const visible = items.filter(item => {
+      const x = item.element.x;
+      return Number.isFinite(x) && x >= left && x <= right;
+    });
+    if (!visible.length) return false;
+    return {
+      x: visible.reduce((s, i) => s + i.element.x, 0) / visible.length,
+      y: visible.reduce((s, i) => s + i.element.y, 0) / visible.length,
+    };
   };
 
   const ctx = document.getElementById('chart').getContext('2d');
@@ -154,16 +191,12 @@
         legend:  { labels: { color: fg, font: { size: 11 }, boxWidth: 12 } },
         historyOverlays: null,
         tooltip: {
-          mode: 'index',
+          mode: 'nearestPerDataset',
           intersect: false,
-          filter: (item) => item.dataset.forecastKind !== 'pace' && item.dataset.forecastKind !== 'projection',
+          position: 'clampedAverage',
           callbacks: {
             title: (items) => items.length ? formatTs(items[0].parsed.x) : '',
             label: (item) => {
-              const kind = item.dataset.forecastKind;
-              if (kind === 'hit') {
-                return `Projected early limit hit: ${item.parsed.y.toFixed(1)}% ${showUsed ? 'used' : 'remaining'}`;
-              }
               if (item.dataset.yAxisID === 'yCredits') {
                 return `${item.dataset.label}: ${item.parsed.y}`;
               }
@@ -323,23 +356,32 @@
   function buildBaseDatasets(entries) {
     return BASE_DATASETS.map(d => {
       const data = [];
+      let prevNonNullReset = null;
       for (let i = 0; i < entries.length; i++) {
         const e = entries[i];
-        if (d.resetKey && i > 0) {
-          const prevReset = parseIsoTime(entries[i - 1][d.resetKey]);
-          const currReset = parseIsoTime(e[d.resetKey]);
-          // API returns slightly varying sub-second precision for the same reset time; compare at second granularity.
-          if (prevReset !== null && currReset !== null && Math.floor(prevReset / 1000) !== Math.floor(currReset / 1000)) {
-            data.push({ x: prevReset, y: null });
+        const currReset = d.resetKey ? parseIsoTime(e[d.resetKey]) : null;
+        if (d.resetKey && currReset !== null) {
+          // Insert a break when the reset time shifts by more than 1 minute (a real period boundary).
+          // Using prevNonNullReset instead of entries[i-1] so idle entries (null resets_at) don't
+          // interfere with boundary detection, and a 60s tolerance absorbs sub-second API jitter.
+          if (prevNonNullReset !== null && Math.abs(prevNonNullReset - currReset) > 60_000) {
+            data.push({ x: prevNonNullReset, y: null });
           }
+          prevNonNullReset = currReset;
+        }
+        const noActiveWindow = d.resetKey && currReset === null;
+        if (noActiveWindow) {
+          if (d.key === 'five_hour') {
+            // Session dataset: explicit null so the green line gaps during idle.
+            data.push({ x: e.timestamp, y: null });
+          }
+          // Weekly datasets: skip idle entries entirely so Chart.js interpolates across the
+          // gap rather than breaking the line within the same weekly period.
+          continue;
         }
         const v = e[d.key];
-        // resets_at is null when no session is active (between sessions); hide those points.
-        const noActiveWindow = d.resetKey && e[d.resetKey] === null;
         let y;
-        if (noActiveWindow) {
-          y = null;
-        } else if (d.yAxisID === 'yPct' && v !== null) {
+        if (d.yAxisID === 'yPct' && v !== null) {
           y = showUsed ? v : 100 - v;
         } else {
           y = v;
