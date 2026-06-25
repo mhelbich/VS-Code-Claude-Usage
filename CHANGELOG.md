@@ -6,11 +6,15 @@ All notable changes to the **Claude Code Usage Status** extension will be docume
 
 ### Added
 
-- Usage History overlays for session starts, weekly resets, and weekly pace / forecast lines
-- Weekly forecast summaries in both the history panel and the status bar tooltip
-- Weekly pace arrow in the status bar showing whether current weekly usage is under, on, or over the projected reset pace
-- New settings to control the history overlays by default
-- History shortcuts for current session, current week, and today in the Usage History view
+- **Usage History overlays** — session-start markers, weekly reset markers, ideal weekly pace line, and weekly forecast projection in the history chart; each overlay can be toggled independently via new settings and in-panel checkboxes
+- **Weekly forecast** — projection toward the next weekly reset shown in the history panel, tooltip, and as a separate color-coded status bar dot; warns if the current pace is on track to hit the limit early; the status bar item can be hidden via right-click → "Claude Usage Forecast"
+- **Tooltip forecast markers** — usage bars in the hover tooltip now include a forecast marker showing projected utilization at reset
+- **History navigation** — quick-select buttons for current session, current week, and today alongside fixed-range buttons (1h, 6h, 1d, 7d, 30d); the selected view persists across panel reloads
+- **New settings** — `showSessionResetMarkers`, `showWeeklyResetMarkers`, and `showWeeklyForecast` to control history overlay defaults
+
+### Fixed
+
+- History chart reset lines are now broken at session and weekly reset boundaries instead of drawing a diagonal line back up to 100% across the chart; idle periods between sessions are hidden to reduce noise
 
 ## [0.2.8] - 2026-06-03
 
