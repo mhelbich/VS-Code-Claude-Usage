@@ -21,7 +21,7 @@
       </div>
       <div class="control-group">
         <span class="control-label">Range</span>
-        <button data-view="range:3600000" class="active">1h</button>
+        <button data-view="range:3600000">1h</button>
         <button data-view="range:21600000">6h</button>
         <button data-view="range:86400000">1d</button>
         <button data-view="range:604800000">7d</button>
@@ -43,6 +43,7 @@
     window.__INITIAL_ENTRIES__ = {{INITIAL_ENTRIES}};
     window.__INITIAL_SHOW_USED__ = {{INITIAL_SHOW_USED}};
     window.__INITIAL_SETTINGS__ = {{INITIAL_SETTINGS}};
+    window.__INITIAL_ACTIVE_VIEW__ = {{INITIAL_ACTIVE_VIEW}};
   </script>
   <script nonce="{{NONCE}}" src="{{CHART_URI}}"></script>
   <script nonce="{{NONCE}}" src="{{JS_URI}}"></script>

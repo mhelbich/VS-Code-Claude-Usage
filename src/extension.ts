@@ -33,7 +33,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     (msg) => log.warn(msg),
     () => getClaudeUsageSetting("historyRetentionDays"),
   );
-  const historyProvider = new UsageHistoryProvider(ctx.extensionUri, historyStore);
+  const historyProvider = new UsageHistoryProvider(ctx.extensionUri, historyStore, ctx.globalState);
   ctx.subscriptions.push(vscode.window.registerWebviewViewProvider(UsageHistoryProvider.viewId, historyProvider));
 
   // Create status bar item

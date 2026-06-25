@@ -11,6 +11,8 @@ export interface HistoryViewSettings {
 
 export class UsageHistoryProvider implements vscode.WebviewViewProvider {
   static readonly viewId = "claudeUsage.historyView";
+  private static readonly ACTIVE_VIEW_KEY = "historyActiveView";
+  private static readonly ACTIVE_VIEW_DEFAULT = "current-session";
 
   private _view: vscode.WebviewView | undefined;
   private _showUsed = false;
@@ -23,6 +25,7 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly store: HistoryStore,
+    private readonly globalState: vscode.Memento,
   ) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -33,6 +36,9 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
       if (msg?.type === "ready") {
         // Re-send the current payload after the webview scripts are live to avoid dropped early messages.
         view.webview.postMessage({ type: "data", entries: this.store.read(), showUsed: this._showUsed, settings: this._settings });
+      }
+      if (msg?.type === "activeView" && typeof msg.value === "string") {
+        this.globalState.update(UsageHistoryProvider.ACTIVE_VIEW_KEY, msg.value);
       }
     });
   }
@@ -50,6 +56,7 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
 
     const nonce = getNonce();
     const template = fs.readFileSync(vscode.Uri.joinPath(this.extensionUri, "history-view", "webview.html").fsPath, "utf8");
+    const activeView = this.globalState.get<string>(UsageHistoryProvider.ACTIVE_VIEW_KEY, UsageHistoryProvider.ACTIVE_VIEW_DEFAULT);
 
     return template
       .replaceAll("{{NONCE}}", nonce)
@@ -59,7 +66,8 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
       .replaceAll("{{JS_URI}}", mediaUri("webview.js").toString())
       .replaceAll("{{INITIAL_ENTRIES}}", JSON.stringify(entries))
       .replaceAll("{{INITIAL_SHOW_USED}}", JSON.stringify(showUsed))
-      .replaceAll("{{INITIAL_SETTINGS}}", JSON.stringify(settings));
+      .replaceAll("{{INITIAL_SETTINGS}}", JSON.stringify(settings))
+      .replaceAll("{{INITIAL_ACTIVE_VIEW}}", JSON.stringify(activeView));
   }
 }
 

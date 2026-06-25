@@ -24,6 +24,9 @@
   document.documentElement.style.setProperty('--legend-risk', warnFg);
   document.documentElement.style.setProperty('--forecast-safe', forecastSafeFg);
 
+  const vscode = acquireVsCodeApi();
+  let persistedState = vscode.getState() || {};
+
   let allEntries = window.__INITIAL_ENTRIES__ || [];
   let showUsed   = window.__INITIAL_SHOW_USED__ ?? true;
   let overlayDefaults = window.__INITIAL_SETTINGS__ || {
@@ -32,11 +35,17 @@
     showWeeklyForecast: true,
   };
   let overlayOverrides = {};
-  let activeView = 'range:3600000';
+  let activeView = persistedState.activeView || window.__INITIAL_ACTIVE_VIEW__ || 'current-session';
   const FIVE_HOUR_MS = 5 * 3_600_000;
   const SEVEN_DAY_MS = 7 * 86_400_000;
   const FORECAST_SAMPLE_STEPS = 24;
   const FALLBACK_VIEW = 'range:3600000';
+
+  function persistActiveView() {
+    persistedState = { ...persistedState, activeView };
+    vscode.setState(persistedState);
+    vscode.postMessage({ type: 'activeView', value: activeView });
+  }
 
   const BASE_DATASETS = [
     { key: 'five_hour',      label: 'Session 5h',    yAxisID: 'yPct',     borderColor: '#4EC9B0', backgroundColor: '#4EC9B022' },
@@ -425,6 +434,7 @@
 
     if ((activeView === 'current-session' || activeView === 'current-week') && !availableViews[activeView]) {
       activeView = FALLBACK_VIEW;
+      persistActiveView();
     }
 
     document.querySelectorAll('#range-controls button[data-view]').forEach(button => {
@@ -547,6 +557,7 @@
     if (!btn) return;
     if (btn.disabled) return;
     activeView = btn.dataset.view;
+    persistActiveView();
     render();
   });
 
@@ -574,6 +585,5 @@
   // Signal to the extension that the webview is ready to receive messages.
   // This handles the race where postMessage is called before the JS listener
   // is registered, which would silently drop the message.
-  const vscode = acquireVsCodeApi();
   vscode.postMessage({ type: 'ready' });
 })();
