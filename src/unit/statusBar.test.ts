@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { reduce, stateToBarProps, State, Action } from "../statusBar";
+import { forecastStateToBarProps, reduce, stateToBarProps, State } from "../statusBar";
 import { buildStatusText, buildTooltipMarkdown } from "../render";
 import { ColorThresholds, UsageResponse } from "../types";
 
@@ -87,6 +87,7 @@ test("stateToBarProps: loading returns correct text and no backgroundColor", () 
   const props = stateToBarProps({ kind: "loading" });
   assert.equal(props.text, "$(pulse) Claude …");
   assert.equal(props.tooltipIsMarkdown, false);
+  assert.equal(props.color, undefined);
   assert.equal(props.backgroundColor, undefined);
 });
 
@@ -138,4 +139,60 @@ test("stateToBarProps: ok with showUsed=false produces text matching buildStatus
 test("stateToBarProps: ok with showUsed=true tooltip matches buildTooltipMarkdown with showUsed=true", () => {
   const props = stateToBarProps({ kind: "ok", usage, thresholds }, true);
   assert.equal(props.tooltipText, buildTooltipMarkdown(usage, thresholds, undefined, true));
+});
+
+test("forecastStateToBarProps: unavailable when state is not ok", () => {
+  const props = forecastStateToBarProps({ kind: "loading" });
+
+  assert.equal(props.text, "$(circle-filled)");
+  assert.equal(props.color, "descriptionForeground");
+  assert.equal(props.tooltipIsMarkdown, false);
+  assert.equal(props.tooltipText, "Weekly forecast unavailable");
+  assert.equal(props.visible, false);
+});
+
+test("forecastStateToBarProps: renders safe weekly forecast chip", () => {
+  const now = Date.parse("2026-03-18T00:00:00.000Z");
+  const props = forecastStateToBarProps(
+    {
+      kind: "ok",
+      thresholds,
+      usage: {
+        seven_day: { utilization: 20, resets_at: "2026-03-23T00:00:00.000Z" },
+      },
+    },
+    false,
+    now,
+  );
+
+  assert.equal(props.text, "$(circle-filled)");
+  assert.equal(props.color, "charts.green");
+  assert.equal(props.tooltipIsMarkdown, true);
+  assert.match(props.tooltipText, /### Weekly Forecast/);
+  assert.match(props.tooltipText, /🟢 \*\*On track\*\*/);
+  assert.match(props.tooltipText, /Projected at reset: \*\*30\.0% remaining\*\*/);
+  assert.match(props.tooltipText, /Your current weekly pace looks safe\./);
+  assert.match(props.tooltipText, /Reset: \*\*120h 0m/);
+});
+
+test("forecastStateToBarProps: renders risk weekly forecast chip", () => {
+  const now = Date.parse("2026-03-18T00:00:00.000Z");
+  const props = forecastStateToBarProps(
+    {
+      kind: "ok",
+      thresholds,
+      usage: {
+        seven_day: { utilization: 45, resets_at: "2026-03-23T00:00:00.000Z" },
+      },
+    },
+    true,
+    now,
+  );
+
+  assert.equal(props.text, "$(circle-filled)");
+  assert.equal(props.color, "charts.red");
+  assert.match(props.tooltipText, /🔴 \*\*Limit risk\*\*/);
+  assert.match(props.tooltipText, /weekly limit may be reached/);
+  assert.match(props.tooltipText, /Projected at reset: \*\*100\.0% used\*\*/);
+  assert.match(props.tooltipText, /Reset: \*\*120h 0m/);
 });

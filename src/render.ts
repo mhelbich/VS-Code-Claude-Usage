@@ -1,22 +1,10 @@
-import { ColorThresholds, UsageResponse } from "./types";
-
-const FIVE_HOUR_MS = 5 * 3_600_000;
-const SEVEN_DAY_MS = 7 * 86_400_000;
+import type { ColorThresholds, UsageResponse } from "./types.js";
+import { FIVE_HOUR_MS, getSessionForecast, getWeeklyForecast, parseIsoTime, type ForecastStatus, type UsageForecast } from "./forecast.js";
 
 type ResetFormatOptions = {
   now?: number;
   formatAbsolute?: (date: Date) => string;
 };
-
-export interface WeeklyForecast {
-  weeklyStart: number;
-  weeklyReset: number;
-  currentUtilization: number;
-  projectedUtilizationAtReset: number;
-  projectedLimitHitAt: number | null;
-}
-
-export type WeeklyPaceStatus = "under" | "on" | "over";
 
 const defaultAbsoluteFormatter = (date: Date): string =>
   date.toLocaleString(undefined, {
@@ -64,83 +52,71 @@ export function formatReset(isoDate: string | null | undefined, options: ResetFo
   return `${relative} (${absolute})`;
 }
 
-function parseIsoTime(isoDate: string | null | undefined): number | null {
-  if (!isoDate) return null;
-  const parsed = Date.parse(isoDate);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 export function getSessionStart(isoDate: string | null | undefined): number | null {
   const resetAt = parseIsoTime(isoDate);
   return resetAt === null ? null : resetAt - FIVE_HOUR_MS;
 }
 
-export function getWeeklyForecast(usage: UsageResponse, now = Date.now()): WeeklyForecast | null {
-  const week = usage.seven_day;
-  const weeklyReset = parseIsoTime(week?.resets_at);
-  if (!week || weeklyReset === null || now >= weeklyReset) return null;
+export { getSessionForecast, getWeeklyForecast };
 
-  const weeklyStart = weeklyReset - SEVEN_DAY_MS;
-  const elapsedMs = now - weeklyStart;
-  if (elapsedMs <= 0) return null;
-
-  // Project the final weekly usage by extending the current burn rate across the full 7-day window.
-  const elapsedRatio = elapsedMs / SEVEN_DAY_MS;
-  const currentUtilization = week.utilization;
-  const projectedUtilizationAtReset = currentUtilization / elapsedRatio;
-
-  let projectedLimitHitAt: number | null = null;
-  if (currentUtilization > 0 && projectedUtilizationAtReset > 100) {
-    // Solve for the timestamp where the linear projection reaches 100% used.
-    const hitAt = weeklyStart + (elapsedMs * 100) / currentUtilization;
-    if (hitAt < weeklyReset) projectedLimitHitAt = hitAt;
-  }
-
-  return {
-    weeklyStart,
-    weeklyReset,
-    currentUtilization,
-    projectedUtilizationAtReset,
-    projectedLimitHitAt,
-  };
+function clampPct(value: number): number {
+  return Math.max(0, Math.min(100, value));
 }
 
-export function getWeeklyPaceStatus(forecast: WeeklyForecast): WeeklyPaceStatus {
-  if (forecast.projectedUtilizationAtReset <= 95) return "under";
-  if (forecast.projectedUtilizationAtReset <= 100) return "on";
-  return "over";
+function usageBarColor(utilization: number, t: ColorThresholds): string {
+  if (utilization >= t.danger) return "#f44747";
+  if (utilization >= t.warning) return "#cca700";
+  return "#4EC9B0";
 }
 
-export function getWeeklyPaceIcon(forecast: WeeklyForecast): string {
-  switch (getWeeklyPaceStatus(forecast)) {
-    case "under":
-      return "$(arrow-down)";
-    case "on":
-      return "$(arrow-right)";
-    case "over":
-      return "$(arrow-up)";
+function forecastMarkerColor(status: ForecastStatus): string {
+  switch (status) {
+    case "risk":
+      return "#f44747";
+    case "watch":
+      return "#cca700";
+    case "safe":
+      return "#4EC9B0";
+    case "unavailable":
+      return "#858585";
   }
 }
 
-function formatWeeklyForecastSummary(forecast: WeeklyForecast, showUsed: boolean, options?: ResetFormatOptions): string {
+export function makeUsageBar(utilization: number, t: ColorThresholds, width = 20, markerUtilization?: number, markerStatus: ForecastStatus = "unavailable"): string {
+  const usedSlots = Math.round((clampPct(utilization) / 100) * width);
+  const markerIndex =
+    markerUtilization === undefined ? null : Math.round((clampPct(markerUtilization) / 100) * (width - 1));
+  const chars: string[] = [];
+
+  for (let i = 0; i < width; i += 1) {
+    if (markerIndex === i) {
+      chars.push(`<span style="color:${forecastMarkerColor(markerStatus)};">│</span>`);
+      continue;
+    }
+    const char = i < usedSlots ? "█" : "░";
+    const color = i < usedSlots ? usageBarColor(utilization, t) : "#555555";
+    chars.push(`<span style="color:${color};">${char}</span>`);
+  }
+
+  return chars.join("");
+}
+
+function formatForecastSummary(forecast: UsageForecast, showUsed: boolean, options?: ResetFormatOptions): string {
   if (forecast.projectedLimitHitAt !== null) {
     const projectedHit = formatReset(new Date(forecast.projectedLimitHitAt).toISOString(), options);
     return showUsed
-      ? `Forecast: At current pace, weekly limit projects to hit in ${projectedHit} before reset.`
-      : `Forecast: At current pace, weekly remaining projects to reach 0 in ${projectedHit} before reset.`;
+      ? `Forecast: At current pace, limit projects to hit in ${projectedHit} before reset.`
+      : `Forecast: At current pace, remaining projects to reach 0 in ${projectedHit} before reset.`;
   }
 
-  // The same projection is phrased differently depending on whether the UI is showing used or remaining.
-  const projectedRemaining = 100 - forecast.projectedUtilizationAtReset;
   return showUsed
-    ? `Forecast: Projected weekly usage at reset: ${forecast.projectedUtilizationAtReset.toFixed(1)}%.`
-    : `Forecast: Projected weekly remaining at reset: ${projectedRemaining.toFixed(1)}%.`;
+    ? `Forecast: projected usage at reset is ${clampPct(forecast.projectedUtilizationAtReset).toFixed(1)}%.`
+    : `Forecast: projected remaining at reset is ${clampPct(forecast.projectedRemainingAtReset).toFixed(1)}%.`;
 }
 
 export function buildStatusText(usage: UsageResponse, t: ColorThresholds, showUsed = false, now = Date.now()): string {
   const session = usage.five_hour;
   const week = usage.seven_day;
-  const weeklyForecast = getWeeklyForecast(usage, now);
 
   const parts: string[] = [];
   if (session) {
@@ -149,8 +125,7 @@ export function buildStatusText(usage: UsageResponse, t: ColorThresholds, showUs
   }
   if (week) {
     const value = showUsed ? week.utilization : 100 - week.utilization;
-    const paceIcon = weeklyForecast ? ` ${getWeeklyPaceIcon(weeklyForecast)}` : "";
-    parts.push(`${utilColor(week.utilization, t)} W: ${value.toFixed(0)}%${paceIcon}`);
+    parts.push(`${utilColor(week.utilization, t)} W: ${value.toFixed(0)}%`);
   }
 
   return parts.length ? `$(pulse) ${parts.join(" │ ")}` : "$(pulse) Claude —";
@@ -163,23 +138,25 @@ function formatUsageBucket(
   t: ColorThresholds,
   showUsed: boolean,
   resetOptions?: ResetFormatOptions,
-  forecastSummary?: string,
+  forecast?: UsageForecast,
 ): string {
   const displayValue = showUsed ? bucket.utilization : 100 - bucket.utilization;
   const label = showUsed ? "used" : "remaining";
   const resetLine = bucket.resets_at !== undefined ? `Resets in ${formatReset(bucket.resets_at, resetOptions)}\n\n` : "";
-  const forecastLine = forecastSummary ? `${forecastSummary}\n\n` : "";
-  return `**${heading}**\n\n` + `${makeHtmlBar(displayValue, bucket.utilization, t)} **${displayValue.toFixed(1)}%** ${label}\n\n` + resetLine + forecastLine;
+  const bar = makeUsageBar(bucket.utilization, t, 20, forecast?.projectedUtilizationAtReset, forecast?.status);
+  const forecastLine = forecast ? `${formatForecastSummary(forecast, showUsed, resetOptions)}\n\n` : "";
+  return `**${heading}**\n\n` + `${bar} **${displayValue.toFixed(1)}%** ${label}\n\n` + resetLine + forecastLine;
 }
 
 export function buildTooltipMarkdown(usage: UsageResponse, t: ColorThresholds, options?: ResetFormatOptions, showUsed = false): string {
   const { five_hour: session, seven_day: week, seven_day_opus: opus, extra_usage: extra } = usage;
   const weeklyForecast = getWeeklyForecast(usage, options?.now);
+  const sessionForecast = getSessionForecast(usage, options?.now);
 
   let markdown = "### Claude Code Usage\n\n";
 
-  if (session) markdown += formatUsageBucket("Session (5h)", session, t, showUsed, options);
-  if (week) markdown += formatUsageBucket("Weekly (7d)", week, t, showUsed, options, weeklyForecast ? formatWeeklyForecastSummary(weeklyForecast, showUsed, options) : undefined);
+  if (session) markdown += formatUsageBucket("Session (5h)", session, t, showUsed, options, sessionForecast?.confidence === "high" ? sessionForecast : undefined);
+  if (week) markdown += formatUsageBucket("Weekly (7d)", week, t, showUsed, options, weeklyForecast ?? undefined);
   if (opus && opus.utilization !== undefined) markdown += formatUsageBucket("Opus (7d)", opus, t, showUsed);
 
   markdown += extra?.is_enabled

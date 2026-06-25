@@ -4,12 +4,13 @@ import { isCacheFresh, readCache, writeCache } from "./cache";
 import { COMMANDS, CONFIG_PATHS, getClaudeUsageSetting } from "./config";
 import { getAccessToken } from "./credentials";
 import { HistoryStore } from "./history";
-import { Action, BarProps, State, reduce, stateToBarProps } from "./statusBar";
+import { Action, BarProps, State, forecastStateToBarProps, reduce, stateToBarProps } from "./statusBar";
 import type { HistoryEntry } from "./types";
 import { UsageHistoryProvider } from "./webviewProvider";
 
 function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
   bar.text = props.text;
+  bar.color = props.color ? new vscode.ThemeColor(props.color) : undefined;
   bar.backgroundColor = props.backgroundColor ? new vscode.ThemeColor(`statusBarItem.${props.backgroundColor}Background`) : undefined;
   if (props.tooltipIsMarkdown) {
     const md = new vscode.MarkdownString(undefined, true);
@@ -19,6 +20,11 @@ function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
     bar.tooltip = md;
   } else {
     bar.tooltip = props.tooltipText;
+  }
+  if (props.visible === false) {
+    bar.hide();
+  } else {
+    bar.show();
   }
 }
 
@@ -37,10 +43,15 @@ export function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(vscode.window.registerWebviewViewProvider(UsageHistoryProvider.viewId, historyProvider));
 
   // Create status bar item
-  const bar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  const bar = vscode.window.createStatusBarItem("claudeUsage.main", vscode.StatusBarAlignment.Right, 100);
+  bar.name = "Claude Usage";
   bar.command = COMMANDS.refresh;
-  bar.show();
   ctx.subscriptions.push(bar);
+
+  const forecastBar = vscode.window.createStatusBarItem("claudeUsage.forecast", vscode.StatusBarAlignment.Right, 99);
+  forecastBar.name = "Claude Usage Forecast";
+  forecastBar.command = COMMANDS.refresh;
+  ctx.subscriptions.push(forecastBar);
 
   let state: State = { kind: "loading" };
 
@@ -55,7 +66,9 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   function dispatch(action: Action): void {
     state = reduce(state, action);
-    applyProps(stateToBarProps(state, getClaudeUsageSetting("showUsed")), bar);
+    const showUsed = getClaudeUsageSetting("showUsed");
+    applyProps(stateToBarProps(state, showUsed), bar);
+    applyProps(forecastStateToBarProps(state, showUsed), forecastBar);
   }
 
   historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings());
@@ -167,6 +180,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         const showUsed = getClaudeUsageSetting("showUsed");
         log.info(`Display settings updated — showUsed: ${showUsed}`);
         applyProps(stateToBarProps(state, showUsed), bar);
+        applyProps(forecastStateToBarProps(state, showUsed), forecastBar);
         historyProvider.refresh(historyStore.read(), showUsed, getHistoryViewSettings());
       }
     }),
@@ -176,6 +190,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
   log.info(`Activated — refresh interval: ${intervalSeconds}s`);
   applyProps(stateToBarProps(state, getClaudeUsageSetting("showUsed")), bar);
+  applyProps(forecastStateToBarProps(state, getClaudeUsageSetting("showUsed")), forecastBar);
   refresh();
   startTimer();
 }
