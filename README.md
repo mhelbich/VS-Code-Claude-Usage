@@ -16,7 +16,7 @@ _Status bar_:
 
 - **Status bar indicator** — shows remaining usage for the current 5-hour session and the 7-day window, color-coded by how much is left
 - **Rich tooltip** — hover to see colored progress bars, exact remaining %, and both relative and absolute reset times
-- **Usage History panel** — a time-series chart in the bottom panel (alongside Terminal/Output) tracking all four usage buckets over time: 5-hour session, 7-day weekly, Opus 7-day, and extra credits. Filter by semantic windows like current session, current week, and today, or by fixed ranges like 1h, 6h, 1d, 7d, and 30d; the selected view persists across reloads. History is stored locally and retained for a configurable number of days.
+- **Usage History panel** — a time-series chart in the bottom panel (alongside Terminal/Output) tracking the 5-hour session, general and model-specific 7-day limits, and extra credits. Filter by semantic windows like current session, current week, and today, or by fixed ranges like 1h, 6h, 1d, 7d, and 30d; the selected view persists across reloads. History is stored locally and retained for a configurable number of days.
 - **History overlays** — optional session-start markers, weekly reset markers, and weekly pace / forecast lines in the Usage History chart; each overlay can be toggled directly in the panel or via settings
 - **Weekly forecast** — a quick projection in the history panel, tooltip, and a separate color-coded status bar dot showing whether the current weekly pace looks safe before reset; right-click the status bar and toggle "Claude Usage Forecast" to show or hide it
 - **Customizable thresholds** — configure when the indicator turns yellow or red
@@ -51,16 +51,17 @@ You must be logged in to Claude Code (`claude /login`). The extension reads your
 
 ## Settings
 
-| Setting                              | Default | Description                                                      |
-| ------------------------------------ | ------- | ---------------------------------------------------------------- |
-| `claudeUsage.refreshIntervalSeconds` | `120`   | How often (in seconds) to poll usage                             |
-| `claudeUsage.warningThreshold`       | `60`    | Usage % at which the indicator turns yellow                      |
-| `claudeUsage.dangerThreshold`        | `90`    | Usage % at which the indicator turns red                         |
-| `claudeUsage.showUsed`               | `false` | Show used % instead of remaining % in the status bar and tooltip |
-| `claudeUsage.historyRetentionDays`   | `30`    | Number of days of usage history to retain in the History panel   |
-| `claudeUsage.showSessionResetMarkers`| `true`  | Show session start markers in the History panel                  |
-| `claudeUsage.showWeeklyResetMarkers` | `true`  | Show weekly reset markers in the History panel                   |
-| `claudeUsage.showWeeklyForecast`     | `true`  | Show weekly pace and forecast overlays in the History panel      |
+| Setting                               | Default | Description                                                        |
+| ------------------------------------- | ------- | ------------------------------------------------------------------ |
+| `claudeUsage.refreshIntervalSeconds`  | `120`   | How often (in seconds) to poll usage                               |
+| `claudeUsage.warningThreshold`        | `60`    | Usage % at which the indicator turns yellow                        |
+| `claudeUsage.dangerThreshold`         | `90`    | Usage % at which the indicator turns red                           |
+| `claudeUsage.showUsed`                | `false` | Show used % instead of remaining % in the status bar and tooltip   |
+| `claudeUsage.historyRetentionDays`    | `30`    | Number of days of usage history to retain in the History panel     |
+| `claudeUsage.showSessionResetMarkers` | `true`  | Show session start markers in the History panel                    |
+| `claudeUsage.showWeeklyResetMarkers`  | `true`  | Show weekly reset markers in the History panel                     |
+| `claudeUsage.showWeeklyForecast`      | `true`  | Show weekly pace and forecast overlays in the History panel        |
+| `claudeUsage.showScopedWeeklyLimits`  | `true`  | Show model-specific weekly limits in the tooltip and History panel |
 
 Thresholds are expressed as **used %** (e.g. the default `60` means "warn when 60% has been consumed, i.e. 40% remaining").
 
