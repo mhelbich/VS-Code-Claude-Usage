@@ -2,6 +2,17 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [0.3.1] - 2026-07-02
+
+### Added
+
+- Model-specific weekly limits returned by the usage API, such as Fable, are shown dynamically in the tooltip and Usage History panel.
+- Added `showScopedWeeklyLimits`, enabled by default, to hide model-specific weekly limit displays while continuing to record their history.
+
+### Removed
+
+- Removed the obsolete fixed Opus 7-day tooltip and history series.
+
 ## [0.3.0] - 2026-06-25
 
 ### Added
