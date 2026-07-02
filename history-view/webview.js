@@ -34,6 +34,7 @@
     showSessionResetMarkers: true,
     showWeeklyResetMarkers: true,
     showWeeklyForecast: true,
+    showScopedWeeklyLimits: true,
   };
   let overlayOverrides = {};
   let activeView = persistedState.activeView || window.__INITIAL_ACTIVE_VIEW__ || 'current-session';
@@ -51,9 +52,9 @@
   const BASE_DATASETS = [
     { key: 'five_hour',      resetKey: 'five_hour_resets_at', label: 'Session 5h',    yAxisID: 'yPct',     borderColor: '#4EC9B0', backgroundColor: '#4EC9B022' },
     { key: 'seven_day',      resetKey: 'seven_day_resets_at', label: 'Weekly 7d',     yAxisID: 'yPct',     borderColor: '#569CD6', backgroundColor: '#569CD622' },
-    { key: 'seven_day_opus', resetKey: 'seven_day_resets_at', label: 'Opus 7d',       yAxisID: 'yPct',     borderColor: '#C586C0', backgroundColor: '#C586C022' },
     { key: 'extra_used',     resetKey: null,                  label: 'Extra credits', yAxisID: 'yCredits', borderColor: '#CE9178', backgroundColor: '#CE917822' },
   ];
+  const SCOPED_COLORS = ['#C586C0', '#DCDCAA', '#9CDCFE', '#D16969', '#B5CEA8', '#CE9178'];
 
   const historyOverlayPlugin = {
     id: 'historyOverlays',
@@ -404,6 +405,56 @@
     });
   }
 
+  function scopedIdentity(scoped) {
+    return scoped.model_id ? `id:${scoped.model_id}` : `name:${scoped.display_name}`;
+  }
+
+  function scopedColor(identity) {
+    let hash = 0;
+    for (let i = 0; i < identity.length; i += 1) hash = ((hash * 31) + identity.charCodeAt(i)) >>> 0;
+    return SCOPED_COLORS[hash % SCOPED_COLORS.length];
+  }
+
+  function buildScopedDatasets(entries) {
+    const models = new Map();
+    for (const entry of entries) {
+      for (const scoped of entry.scoped_weekly ?? []) {
+        models.set(scopedIdentity(scoped), scoped.display_name);
+      }
+    }
+
+    return [...models.entries()].map(([identity, displayName]) => {
+      const data = [];
+      let prevNonNullReset = null;
+      for (const entry of entries) {
+        const scoped = (entry.scoped_weekly ?? []).find(item => scopedIdentity(item) === identity);
+        if (!scoped) continue;
+        const currReset = parseIsoTime(scoped.resets_at);
+        if (currReset !== null) {
+          if (prevNonNullReset !== null && Math.abs(prevNonNullReset - currReset) > 60_000) {
+            data.push({ x: prevNonNullReset, y: null });
+          }
+          prevNonNullReset = currReset;
+        }
+        data.push({ x: entry.timestamp, y: showUsed ? scoped.percent : 100 - scoped.percent });
+      }
+      const color = scopedColor(identity);
+      return {
+        label: `${displayName} 7d`,
+        data,
+        yAxisID: 'yPct',
+        borderColor: color,
+        backgroundColor: `${color}22`,
+        borderWidth: 1.5,
+        pointRadius: 2,
+        tension: 0.3,
+        fill: false,
+        spanGaps: false,
+        order: 10,
+      };
+    });
+  }
+
   function buildForecastDatasets(forecast) {
     if (!forecast) return [];
 
@@ -574,6 +625,7 @@
     chart.data.labels = [];
     chart.data.datasets = [
       ...buildBaseDatasets(filtered),
+      ...(overlayDefaults.showScopedWeeklyLimits ? buildScopedDatasets(filtered) : []),
       ...buildForecastDatasets(showWeeklyForecast ? weeklyForecast : null),
     ];
     chart.options.plugins.historyOverlays = {

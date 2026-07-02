@@ -111,6 +111,12 @@
           "default": true,
           "description": "Show weekly pace and forecast overlays in the Usage History chart.",
           "order": 8
+        },
+        "claudeUsage.showScopedWeeklyLimits": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show model-specific weekly limits in the tooltip and Usage History panel.",
+          "order": 9
         }
       }
     }

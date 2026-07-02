@@ -4,6 +4,7 @@ import { isCacheFresh, readCache, writeCache } from "./cache";
 import { COMMANDS, CONFIG_PATHS, getClaudeUsageSetting } from "./config";
 import { getAccessToken } from "./credentials";
 import { HistoryStore } from "./history";
+import { getScopedWeeklyLimits } from "./scopedLimits";
 import { Action, BarProps, State, forecastStateToBarProps, reduce, stateToBarProps } from "./statusBar";
 import type { HistoryEntry } from "./types";
 import { UsageHistoryProvider } from "./webviewProvider";
@@ -61,13 +62,14 @@ export function activate(ctx: vscode.ExtensionContext) {
       showSessionResetMarkers: getClaudeUsageSetting("showSessionResetMarkers"),
       showWeeklyResetMarkers: getClaudeUsageSetting("showWeeklyResetMarkers"),
       showWeeklyForecast: getClaudeUsageSetting("showWeeklyForecast"),
+      showScopedWeeklyLimits: getClaudeUsageSetting("showScopedWeeklyLimits"),
     };
   }
 
   function dispatch(action: Action): void {
     state = reduce(state, action);
     const showUsed = getClaudeUsageSetting("showUsed");
-    applyProps(stateToBarProps(state, showUsed), bar);
+    applyProps(stateToBarProps(state, showUsed, getClaudeUsageSetting("showScopedWeeklyLimits")), bar);
     applyProps(forecastStateToBarProps(state, showUsed), forecastBar);
   }
 
@@ -120,7 +122,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         five_hour_resets_at: usage.five_hour?.resets_at ?? null,
         seven_day: usage.seven_day?.utilization ?? null,
         seven_day_resets_at: usage.seven_day?.resets_at ?? null,
-        seven_day_opus: usage.seven_day_opus?.utilization ?? null,
+        scoped_weekly: getScopedWeeklyLimits(usage),
         extra_used: usage.extra_usage?.used_credits ?? null,
         extra_limit: usage.extra_usage?.monthly_limit ?? null,
       };
@@ -175,11 +177,12 @@ export function activate(ctx: vscode.ExtensionContext) {
         e.affectsConfiguration(CONFIG_PATHS.showUsed) ||
         e.affectsConfiguration(CONFIG_PATHS.showSessionResetMarkers) ||
         e.affectsConfiguration(CONFIG_PATHS.showWeeklyResetMarkers) ||
-        e.affectsConfiguration(CONFIG_PATHS.showWeeklyForecast)
+        e.affectsConfiguration(CONFIG_PATHS.showWeeklyForecast) ||
+        e.affectsConfiguration(CONFIG_PATHS.showScopedWeeklyLimits)
       ) {
         const showUsed = getClaudeUsageSetting("showUsed");
         log.info(`Display settings updated — showUsed: ${showUsed}`);
-        applyProps(stateToBarProps(state, showUsed), bar);
+        applyProps(stateToBarProps(state, showUsed, getClaudeUsageSetting("showScopedWeeklyLimits")), bar);
         applyProps(forecastStateToBarProps(state, showUsed), forecastBar);
         historyProvider.refresh(historyStore.read(), showUsed, getHistoryViewSettings());
       }
@@ -189,7 +192,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   // Initialize status bar immediately then kick off async refresh
   const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
   log.info(`Activated — refresh interval: ${intervalSeconds}s`);
-  applyProps(stateToBarProps(state, getClaudeUsageSetting("showUsed")), bar);
+  applyProps(stateToBarProps(state, getClaudeUsageSetting("showUsed"), getClaudeUsageSetting("showScopedWeeklyLimits")), bar);
   applyProps(forecastStateToBarProps(state, getClaudeUsageSetting("showUsed")), forecastBar);
   refresh();
   startTimer();

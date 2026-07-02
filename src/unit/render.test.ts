@@ -154,7 +154,12 @@ test("buildTooltipMarkdown renders all enabled sections", () => {
   const usage: UsageResponse = {
     five_hour: { utilization: 25, resets_at: "2026-03-16T12:30:00.000Z" },
     seven_day: { utilization: 70, resets_at: "2026-03-18T10:15:00.000Z" },
-    seven_day_opus: { utilization: 40, resets_at: null },
+    limits: [{
+      kind: "weekly_scoped",
+      percent: 40,
+      resets_at: null,
+      scope: { model: { id: null, display_name: "Fable" } },
+    }],
     extra_usage: {
       is_enabled: true,
       monthly_limit: 100,
@@ -171,12 +176,25 @@ test("buildTooltipMarkdown renders all enabled sections", () => {
   assert.match(tooltip, /### Claude Code Usage/);
   assert.match(tooltip, /\*\*Session \(5h\)\*\*/);
   assert.match(tooltip, /\*\*Weekly \(7d\)\*\*/);
-  assert.match(tooltip, /\*\*Opus \(7d\)\*\*/);
+  assert.match(tooltip, /\*\*Fable \(7d\)\*\*/);
   assert.match(tooltip, /\*\*Extra usage:\*\* 25 \/ 100 credits/);
   assert.match(tooltip, /Resets in 2h 30m \(2026-03-16T12:30:00.000Z\)/);
   assert.match(tooltip, /Forecast: projected remaining at reset is 1\.8%/);
   assert.match(tooltip, /│/);
   assert.match(tooltip, /Click to refresh/);
+});
+
+test("buildTooltipMarkdown can hide scoped weekly limits", () => {
+  const usage: UsageResponse = {
+    limits: [{
+      kind: "weekly_scoped",
+      percent: 40,
+      resets_at: null,
+      scope: { model: { display_name: "Fable" } },
+    }],
+  };
+
+  assert.doesNotMatch(buildTooltipMarkdown(usage, thresholds, undefined, false, false), /Fable/);
 });
 
 test("buildTooltipMarkdown shows disabled extra usage when not enabled", () => {

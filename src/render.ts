@@ -1,5 +1,6 @@
 import type { ColorThresholds, UsageResponse } from "./types.js";
 import { FIVE_HOUR_MS, getSessionForecast, getWeeklyForecast, parseIsoTime, type ForecastStatus, type UsageForecast } from "./forecast.js";
+import { getScopedWeeklyLimits } from "./scopedLimits.js";
 
 type ResetFormatOptions = {
   now?: number;
@@ -148,8 +149,8 @@ function formatUsageBucket(
   return `**${heading}**\n\n` + `${bar} **${displayValue.toFixed(1)}%** ${label}\n\n` + resetLine + forecastLine;
 }
 
-export function buildTooltipMarkdown(usage: UsageResponse, t: ColorThresholds, options?: ResetFormatOptions, showUsed = false): string {
-  const { five_hour: session, seven_day: week, seven_day_opus: opus, extra_usage: extra } = usage;
+export function buildTooltipMarkdown(usage: UsageResponse, t: ColorThresholds, options?: ResetFormatOptions, showUsed = false, showScopedWeeklyLimits = true): string {
+  const { five_hour: session, seven_day: week, extra_usage: extra } = usage;
   const weeklyForecast = getWeeklyForecast(usage, options?.now);
   const sessionForecast = getSessionForecast(usage, options?.now);
 
@@ -157,7 +158,11 @@ export function buildTooltipMarkdown(usage: UsageResponse, t: ColorThresholds, o
 
   if (session) markdown += formatUsageBucket("Session (5h)", session, t, showUsed, options, sessionForecast?.confidence === "high" ? sessionForecast : undefined);
   if (week) markdown += formatUsageBucket("Weekly (7d)", week, t, showUsed, options, weeklyForecast ?? undefined);
-  if (opus && opus.utilization !== undefined) markdown += formatUsageBucket("Opus (7d)", opus, t, showUsed);
+  if (showScopedWeeklyLimits) {
+    for (const scoped of getScopedWeeklyLimits(usage)) {
+      markdown += formatUsageBucket(`${scoped.display_name} (7d)`, { utilization: scoped.percent, resets_at: scoped.resets_at }, t, showUsed, options);
+    }
+  }
 
   markdown += extra?.is_enabled
     ? `**Extra usage:** ${extra.used_credits} / ${extra.monthly_limit} credits\n\n`

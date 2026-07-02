@@ -10,7 +10,12 @@ const sample: HistoryEntry = {
   five_hour_resets_at: "2026-03-16T12:00:00.000Z",
   seven_day: 10,
   seven_day_resets_at: "2026-03-20T12:00:00.000Z",
-  seven_day_opus: 5,
+  scoped_weekly: [{
+    model_id: null,
+    display_name: "Fable",
+    percent: 5,
+    resets_at: "2026-03-20T12:00:00.000Z",
+  }],
   extra_used: 20,
   extra_limit: 500,
 };

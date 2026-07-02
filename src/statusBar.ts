@@ -120,7 +120,7 @@ export function reduce(state: State, action: Action): State {
   }
 }
 
-export function stateToBarProps(state: State, showUsed = false): BarProps {
+export function stateToBarProps(state: State, showUsed = false, showScopedWeeklyLimits = true): BarProps {
   switch (state.kind) {
     case "loading":
       return { text: "$(pulse) Claude …", tooltipText: "Claude Code usage — loading", tooltipIsMarkdown: false, color: undefined, backgroundColor: undefined };
@@ -143,7 +143,7 @@ export function stateToBarProps(state: State, showUsed = false): BarProps {
     case "ok":
       return {
         text: buildStatusText(state.usage, state.thresholds, showUsed),
-        tooltipText: buildTooltipMarkdown(state.usage, state.thresholds, undefined, showUsed),
+        tooltipText: buildTooltipMarkdown(state.usage, state.thresholds, undefined, showUsed, showScopedWeeklyLimits),
         tooltipIsMarkdown: true,
         color: undefined,
         backgroundColor: undefined,

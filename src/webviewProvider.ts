@@ -7,6 +7,7 @@ export interface HistoryViewSettings {
   showSessionResetMarkers: boolean;
   showWeeklyResetMarkers: boolean;
   showWeeklyForecast: boolean;
+  showScopedWeeklyLimits: boolean;
 }
 
 export class UsageHistoryProvider implements vscode.WebviewViewProvider {
@@ -20,6 +21,7 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
     showSessionResetMarkers: true,
     showWeeklyResetMarkers: true,
     showWeeklyForecast: true,
+    showScopedWeeklyLimits: true,
   };
 
   constructor(
