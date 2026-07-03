@@ -2,6 +2,14 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## Unreleased
+
+### Changed
+
+- Replaced the continuously linear weekly forecast with a regularized baseline that avoids extreme projections immediately after reset and gradually incorporates recent personal weekly usage patterns.
+- Status bar, tooltip, and Usage History now share one forecast engine and identify whether a baseline or personalized forecast is being shown.
+- Forecast learning is stored separately from chart history, so changing history retention no longer changes the learned forecast profile.
+
 ## [0.3.1] - 2026-07-02
 
 ### Added
