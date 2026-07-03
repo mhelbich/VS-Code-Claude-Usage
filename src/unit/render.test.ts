@@ -180,7 +180,7 @@ test("buildTooltipMarkdown renders all enabled sections", () => {
   assert.match(tooltip, /\*\*Fable \(7d\)\*\*/);
   assert.match(tooltip, /\*\*Extra usage:\*\* 25 \/ 100 credits/);
   assert.match(tooltip, /Resets in 2h 30m \(2026-03-16T12:30:00.000Z\)/);
-  assert.match(tooltip, /Forecast: projected remaining at reset is 1\.6%/);
+  assert.match(tooltip, /Forecast: 1\.6% remaining at reset · Baseline/);
   assert.match(tooltip, /│/);
   assert.match(tooltip, /Click to refresh/);
 });
@@ -217,7 +217,7 @@ test("buildTooltipMarkdown shows used % and 'used' label when showUsed is true",
 
   assert.match(tooltip, /\*\*25\.0%\*\* used/);
   assert.match(tooltip, /\*\*70\.0%\*\* used/);
-  assert.match(tooltip, /Forecast: projected usage at reset is 98\.4%/);
+  assert.match(tooltip, /Forecast: 98\.4% used at reset · Baseline/);
   assert.doesNotMatch(tooltip, /remaining/);
 });
 
@@ -248,7 +248,7 @@ test("buildTooltipMarkdown shows remaining % and 'remaining' label when showUsed
 
   assert.match(tooltip, /\*\*75\.0%\*\* remaining/);
   assert.match(tooltip, /\*\*30\.0%\*\* remaining/);
-  assert.match(tooltip, /Forecast: projected remaining at reset is 1\.6%/);
+  assert.match(tooltip, /Forecast: 1\.6% remaining at reset · Baseline/);
   assert.doesNotMatch(tooltip, / used/);
 });
 
@@ -265,5 +265,5 @@ test("buildTooltipMarkdown warns when the weekly limit projects to hit before re
     false,
   );
 
-  assert.match(tooltip, /Forecast: At current pace, remaining projects to reach 0 in 71h 46m \(2026-03-20T23:46:01\.165Z\) before reset\./);
+  assert.match(tooltip, /Forecast: Limit in 71h 46m \(2026-03-20T23:46:01\.165Z\) · Baseline/);
 });

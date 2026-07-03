@@ -1,16 +1,16 @@
 import type { ColorThresholds, UsageResponse } from "./types.js";
 import { buildStatusText, buildTooltipMarkdown, formatReset } from "./render.js";
-import { getWeeklyForecast, type ForecastStatus } from "./forecast.js";
+import { getWeeklyForecast, type ForecastStatus, type UsageForecast } from "./forecast.js";
 
 export type State =
   | { kind: "loading" }
-  | { kind: "ok"; usage: UsageResponse; thresholds: ColorThresholds }
+  | { kind: "ok"; usage: UsageResponse; thresholds: ColorThresholds; forecast?: UsageForecast | null }
   | { kind: "no-token" }
   | { kind: "error"; message?: string };
 
 export type Action =
   | { type: "refresh-started" }
-  | { type: "fetch-success"; usage: UsageResponse; thresholds: ColorThresholds }
+  | { type: "fetch-success"; usage: UsageResponse; thresholds: ColorThresholds; forecast?: UsageForecast | null }
   | { type: "fetch-error"; message?: string }
   | { type: "no-token" }
   | { type: "thresholds-changed"; thresholds: ColorThresholds };
@@ -59,18 +59,18 @@ function formatForecastTooltip(forecast: NonNullable<ReturnType<typeof getWeekly
   const projectedLabel = showUsed ? "used" : "remaining";
   const projectedLine = `Projected at reset: **${clampPct(projectedValue).toFixed(1)}% ${projectedLabel}**`;
   const resetLine = `Reset: **${formatReset(new Date(forecast.reset).toISOString(), { now })}**`;
-  const confidenceLine = forecast.confidence === "low" ? "\n\nLow confidence: early in the weekly window." : "";
+  const methodLine = forecast.method === "personalized"
+    ? `Based on: **Personalized · ${forecast.historyWeeks} week${forecast.historyWeeks === 1 ? "" : "s"}${forecast.historyBlend < 1 ? " + baseline" : ""}**`
+    : "Based on: **Baseline**";
 
   if (forecast.projectedLimitHitAt !== null) {
-    const hitLine = `At current pace, the weekly limit may be reached **${formatReset(new Date(forecast.projectedLimitHitAt).toISOString(), { now })}**.`;
-    return `### Weekly Forecast\n\n🔴 **${forecastHeading(forecast.status)}**\n\n${hitLine}\n\n${projectedLine}\n\n${resetLine}${confidenceLine}`;
+    const hitLine = `Limit: **${formatReset(new Date(forecast.projectedLimitHitAt).toISOString(), { now })}**`;
+    return `### Weekly Forecast\n\n🔴 **${forecastHeading(forecast.status)}**\n\n${hitLine}\n\n${projectedLine}\n\n${methodLine}\n\n${resetLine}`;
   }
 
-  const statusLine = forecast.status === "watch"
-    ? "You are still under the limit, but with little buffer."
-    : "Your current weekly pace looks safe.";
+  const statusLine = forecast.status === "watch" ? "Little buffer remains." : "Weekly usage looks on track.";
 
-  return `### Weekly Forecast\n\n${forecast.status === "watch" ? "🟡" : "🟢"} **${forecastHeading(forecast.status)}**\n\n${projectedLine}\n\n${statusLine}\n\n${resetLine}${confidenceLine}`;
+  return `### Weekly Forecast\n\n${forecast.status === "watch" ? "🟡" : "🟢"} **${forecastHeading(forecast.status)}**\n\n${projectedLine}\n\n${statusLine}\n\n${methodLine}\n\n${resetLine}`;
 }
 
 export function forecastStateToBarProps(state: State, showUsed = false, now = Date.now()): BarProps {
@@ -85,7 +85,7 @@ export function forecastStateToBarProps(state: State, showUsed = false, now = Da
     };
   }
 
-  const forecast = getWeeklyForecast(state.usage, now);
+  const forecast = state.forecast === undefined ? getWeeklyForecast(state.usage, now) : state.forecast;
   if (!forecast) {
     return {
       text: "$(circle-filled)",
@@ -110,7 +110,9 @@ export function reduce(state: State, action: Action): State {
     case "refresh-started":
       return state.kind === "ok" ? state : { kind: "loading" };
     case "fetch-success":
-      return { kind: "ok", usage: action.usage, thresholds: action.thresholds };
+      return action.forecast === undefined
+        ? { kind: "ok", usage: action.usage, thresholds: action.thresholds }
+        : { kind: "ok", usage: action.usage, thresholds: action.thresholds, forecast: action.forecast };
     case "fetch-error":
       return { kind: "error", message: action.message };
     case "no-token":
@@ -143,7 +145,7 @@ export function stateToBarProps(state: State, showUsed = false, showScopedWeekly
     case "ok":
       return {
         text: buildStatusText(state.usage, state.thresholds, showUsed),
-        tooltipText: buildTooltipMarkdown(state.usage, state.thresholds, undefined, showUsed, showScopedWeeklyLimits),
+        tooltipText: buildTooltipMarkdown(state.usage, state.thresholds, undefined, showUsed, showScopedWeeklyLimits, state.forecast),
         tooltipIsMarkdown: true,
         color: undefined,
         backgroundColor: undefined,

@@ -3,10 +3,11 @@ import { fetchUsage } from "./api";
 import { isCacheFresh, readCache, writeCache } from "./cache";
 import { COMMANDS, CONFIG_PATHS, getClaudeUsageSetting } from "./config";
 import { getAccessToken } from "./credentials";
+import { EMPTY_FORECAST_PROFILE, getWeeklyForecast, updateForecastProfile, type ForecastProfile } from "./forecast";
 import { HistoryStore } from "./history";
 import { getScopedWeeklyLimits } from "./scopedLimits";
 import { Action, BarProps, State, forecastStateToBarProps, reduce, stateToBarProps } from "./statusBar";
-import type { HistoryEntry } from "./types";
+import type { HistoryEntry, UsageResponse } from "./types";
 import { UsageHistoryProvider } from "./webviewProvider";
 
 function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
@@ -27,6 +28,19 @@ function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
   } else {
     bar.show();
   }
+}
+
+function toHistoryEntry(usage: UsageResponse, timestamp: number): HistoryEntry {
+  return {
+    timestamp,
+    five_hour: usage.five_hour?.utilization ?? null,
+    five_hour_resets_at: usage.five_hour?.resets_at ?? null,
+    seven_day: usage.seven_day?.utilization ?? null,
+    seven_day_resets_at: usage.seven_day?.resets_at ?? null,
+    scoped_weekly: getScopedWeeklyLimits(usage),
+    extra_used: usage.extra_usage?.used_credits ?? null,
+    extra_limit: usage.extra_usage?.monthly_limit ?? null,
+  };
 }
 
 // ─── Extension lifecycle ──────────────────────────────────────────────────────
@@ -55,6 +69,12 @@ export function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(forecastBar);
 
   let state: State = { kind: "loading" };
+  const forecastProfileKey = "weeklyForecastProfile.v1";
+  let forecastProfile = updateForecastProfile(
+    ctx.globalState.get<ForecastProfile>(forecastProfileKey) ?? EMPTY_FORECAST_PROFILE,
+    historyStore.read(),
+  );
+  void ctx.globalState.update(forecastProfileKey, forecastProfile);
 
   function getHistoryViewSettings() {
     // Keep persisted defaults in one place; the webview can still override them locally per session.
@@ -73,7 +93,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     applyProps(forecastStateToBarProps(state, showUsed), forecastBar);
   }
 
-  historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings());
+  historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), null);
 
   let timer: ReturnType<typeof setInterval> | undefined;
   ctx.subscriptions.push(
@@ -94,9 +114,14 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (!force && cached && isCacheFresh(cached, intervalSeconds)) {
       const ageSeconds = Math.round((Date.now() - cached.fetchedAt) / 1000);
       log.debug(`Cache hit (${ageSeconds}s old) — skipping API call`);
+      forecastProfile = updateForecastProfile(forecastProfile, [toHistoryEntry(cached.data, cached.fetchedAt)], refreshStartedAt);
+      await ctx.globalState.update(forecastProfileKey, forecastProfile);
+      const forecast = getWeeklyForecast(cached.data, refreshStartedAt, forecastProfile);
+      historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), forecast);
       dispatch({
         type: "fetch-success",
         usage: cached.data,
+        forecast,
         thresholds: {
           warning: getClaudeUsageSetting("warningThreshold"),
           danger: getClaudeUsageSetting("dangerThreshold"),
@@ -116,22 +141,17 @@ export function activate(ctx: vscode.ExtensionContext) {
       const usage = await fetchUsage(token);
       writeCache(usage, refreshStartedAt);
       log.info("Usage fetched successfully");
-      const entry: HistoryEntry = {
-        timestamp: Date.now(),
-        five_hour: usage.five_hour?.utilization ?? null,
-        five_hour_resets_at: usage.five_hour?.resets_at ?? null,
-        seven_day: usage.seven_day?.utilization ?? null,
-        seven_day_resets_at: usage.seven_day?.resets_at ?? null,
-        scoped_weekly: getScopedWeeklyLimits(usage),
-        extra_used: usage.extra_usage?.used_credits ?? null,
-        extra_limit: usage.extra_usage?.monthly_limit ?? null,
-      };
+      const entry = toHistoryEntry(usage, Date.now());
+      forecastProfile = updateForecastProfile(forecastProfile, [entry], entry.timestamp);
+      await ctx.globalState.update(forecastProfileKey, forecastProfile);
       // Persist reset metadata alongside utilization so the history view can derive markers and forecasts later.
       historyStore.append(entry);
-      historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings());
+      const forecast = getWeeklyForecast(usage, entry.timestamp, forecastProfile);
+      historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), forecast);
       dispatch({
         type: "fetch-success",
         usage,
+        forecast,
         thresholds: {
           warning: getClaudeUsageSetting("warningThreshold"),
           danger: getClaudeUsageSetting("dangerThreshold"),
@@ -171,7 +191,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       }
       if (e.affectsConfiguration(CONFIG_PATHS.historyRetentionDays)) {
         log.info(`History retention updated — ${getClaudeUsageSetting("historyRetentionDays")} days`);
-        historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings());
+        historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), state.kind === "ok" ? state.forecast ?? null : null);
       }
       if (
         e.affectsConfiguration(CONFIG_PATHS.showUsed) ||
@@ -184,7 +204,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         log.info(`Display settings updated — showUsed: ${showUsed}`);
         applyProps(stateToBarProps(state, showUsed, getClaudeUsageSetting("showScopedWeeklyLimits")), bar);
         applyProps(forecastStateToBarProps(state, showUsed), forecastBar);
-        historyProvider.refresh(historyStore.read(), showUsed, getHistoryViewSettings());
+        historyProvider.refresh(historyStore.read(), showUsed, getHistoryViewSettings(), state.kind === "ok" ? state.forecast ?? null : null);
       }
     }),
   );
