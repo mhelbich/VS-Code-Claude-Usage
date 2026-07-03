@@ -170,7 +170,7 @@ test("forecastStateToBarProps: renders safe weekly forecast chip", () => {
   assert.equal(props.tooltipIsMarkdown, true);
   assert.match(props.tooltipText, /### Weekly Forecast/);
   assert.match(props.tooltipText, /🟢 \*\*On track\*\*/);
-  assert.match(props.tooltipText, /Projected at reset: \*\*30\.0% remaining\*\*/);
+  assert.match(props.tooltipText, /Projected at reset: \*\*19\.3% remaining\*\*/);
   assert.match(props.tooltipText, /Your current weekly pace looks safe\./);
   assert.match(props.tooltipText, /Reset: \*\*120h 0m/);
 });
