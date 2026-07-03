@@ -102,7 +102,9 @@
         drawVerticalMarkers(ctx, xScale, chartArea, overlayState.weeklyResets, '#569CD688', [8, 4]);
       }
       if (overlayState.showWeeklyForecast && overlayState.weeklyForecast) {
-        drawForecastLabel(ctx, xScale, yScale, chartArea, overlayState.weeklyForecast.projectedEnd, overlayState.weeklyForecast.projectedLabel, overlayState.weeklyForecast.warning ? warnFg : forecastSafeFg);
+        if (overlayState.weeklyForecast.projectedEnd) {
+          drawForecastLabel(ctx, xScale, yScale, chartArea, overlayState.weeklyForecast.projectedEnd, overlayState.weeklyForecast.projectedLabel, forecastSafeFg);
+        }
         if (overlayState.weeklyForecast.hitPoint) {
           drawForecastLabel(ctx, xScale, yScale, chartArea, overlayState.weeklyForecast.hitPoint, 'limit hit', warnFg);
         }
@@ -435,6 +437,8 @@
     if (!forecast) return [];
 
     const projectionColor = forecast.projectedLimitHitAt !== null ? warnFg : forecastSafeFg;
+    const projectionEndX = forecast.projectedLimitHitAt ?? forecast.reset;
+    const projectionEndUsed = forecast.projectedLimitHitAt !== null ? 100 : forecast.projectedUtilizationAtReset;
     const idealData = sampleLinePoints(
       forecast.start,
       toDisplayPct(0),
@@ -444,8 +448,8 @@
     const projectionData = sampleLinePoints(
       forecast.calculatedAt,
       toDisplayPct(forecast.currentUtilization),
-      forecast.reset,
-      toDisplayPct(forecast.projectedUtilizationAtReset),
+      projectionEndX,
+      toDisplayPct(projectionEndUsed),
     );
 
     const datasets = [
@@ -616,10 +620,12 @@
       weeklyForecast: showWeeklyForecast && weeklyForecast
         ? {
             warning: weeklyForecast.projectedLimitHitAt !== null,
-            projectedEnd: {
-              x: weeklyForecast.reset,
-              y: toDisplayPct(weeklyForecast.projectedUtilizationAtReset),
-            },
+            projectedEnd: weeklyForecast.projectedLimitHitAt === null
+              ? {
+                  x: weeklyForecast.reset,
+                  y: toDisplayPct(weeklyForecast.projectedUtilizationAtReset),
+                }
+              : null,
             projectedLabel: showUsed
               ? `${Math.max(0, weeklyForecast.projectedUtilizationAtReset).toFixed(0)}% used`
               : `${Math.max(0, weeklyForecast.projectedRemainingAtReset).toFixed(0)}% left`,
