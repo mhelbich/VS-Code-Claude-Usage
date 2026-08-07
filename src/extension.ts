@@ -68,11 +68,17 @@ export function activate(ctx: vscode.ExtensionContext) {
   forecastBar.command = COMMANDS.refresh;
   ctx.subscriptions.push(forecastBar);
 
+  function onIncompleteForecastWeek(reset: number, sampleCount: number): void {
+    log.debug(`Weekly forecast profile: dropping week ending ${new Date(reset).toISOString()} — only ${sampleCount} usable sample(s), not enough coverage to learn from`);
+  }
+
   let state: State = { kind: "loading" };
   const forecastProfileKey = "weeklyForecastProfile.v1";
   let forecastProfile = updateForecastProfile(
     ctx.globalState.get<ForecastProfile>(forecastProfileKey) ?? EMPTY_FORECAST_PROFILE,
     historyStore.read(),
+    undefined,
+    onIncompleteForecastWeek,
   );
   void ctx.globalState.update(forecastProfileKey, forecastProfile);
 
@@ -114,7 +120,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (!force && cached && isCacheFresh(cached, intervalSeconds)) {
       const ageSeconds = Math.round((Date.now() - cached.fetchedAt) / 1000);
       log.debug(`Cache hit (${ageSeconds}s old) — skipping API call`);
-      forecastProfile = updateForecastProfile(forecastProfile, [toHistoryEntry(cached.data, cached.fetchedAt)], refreshStartedAt);
+      forecastProfile = updateForecastProfile(forecastProfile, [toHistoryEntry(cached.data, cached.fetchedAt)], refreshStartedAt, onIncompleteForecastWeek);
       await ctx.globalState.update(forecastProfileKey, forecastProfile);
       const forecast = getWeeklyForecast(cached.data, refreshStartedAt, forecastProfile);
       historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), forecast);
@@ -142,7 +148,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       writeCache(usage, refreshStartedAt);
       log.info("Usage fetched successfully");
       const entry = toHistoryEntry(usage, Date.now());
-      forecastProfile = updateForecastProfile(forecastProfile, [entry], entry.timestamp);
+      forecastProfile = updateForecastProfile(forecastProfile, [entry], entry.timestamp, onIncompleteForecastWeek);
       await ctx.globalState.update(forecastProfileKey, forecastProfile);
       // Persist reset metadata alongside utilization so the history view can derive markers and forecasts later.
       historyStore.append(entry);

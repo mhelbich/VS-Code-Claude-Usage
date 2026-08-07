@@ -251,7 +251,12 @@ function buildWeekProfile(reset: number, observations: ForecastObservation[]): F
   return { reset, finalUtilization: curve[PROFILE_BIN_COUNT] as number, curve };
 }
 
-export function updateForecastProfile(profile: ForecastProfile | undefined, entries: HistoryEntry[], now = Date.now()): ForecastProfile {
+export function updateForecastProfile(
+  profile: ForecastProfile | undefined,
+  entries: HistoryEntry[],
+  now = Date.now(),
+  onIncompleteWeek?: (reset: number, sampleCount: number) => void,
+): ForecastProfile {
   const current = profile?.version === 1 ? profile : EMPTY_FORECAST_PROFILE;
   const knownResets = new Set(current.weeks.map((week) => week.reset));
   const incoming = entries.flatMap((entry): ForecastObservation[] => {
@@ -283,7 +288,13 @@ export function updateForecastProfile(profile: ForecastProfile | undefined, entr
 
   const added = [...entriesByReset.entries()].flatMap(([reset, grouped]) => {
     const week = buildWeekProfile(reset, grouped);
-    return week ? [week] : [];
+    if (!week) {
+      // The reset already passed, so these samples will never be revisited — this week's
+      // usage pattern is permanently excluded from personalization once discarded here.
+      onIncompleteWeek?.(reset, grouped.length);
+      return [];
+    }
+    return [week];
   });
   const weeks = [...current.weeks, ...added]
     .sort((a, b) => b.reset - a.reset)

@@ -104,6 +104,21 @@ test("profile observations survive independently of chart history and finalize a
   assert.equal(profile.weeks[0].finalUtilization, 41);
 });
 
+test("incomplete weeks are reported via onIncompleteWeek and their samples are dropped", () => {
+  const reset = Date.parse("2026-03-16T00:00:00.000Z");
+  const start = reset - SEVEN_DAY_MS;
+  const entries = [historyEntry(start, reset, 0), historyEntry(start + FOUR_HOURS_MS, reset, 5)];
+  const dropped: Array<{ reset: number; sampleCount: number }> = [];
+
+  const profile = updateForecastProfile(EMPTY_FORECAST_PROFILE, entries, reset, (r, sampleCount) => {
+    dropped.push({ reset: r, sampleCount });
+  });
+
+  assert.equal(profile.weeks.length, 0);
+  assert.equal(profile.observations.length, 0, "samples for the passed week are not retried later");
+  assert.deepEqual(dropped, [{ reset, sampleCount: 2 }]);
+});
+
 test("large offline gaps are not assigned to specific profile bins", () => {
   const reset = Date.parse("2026-03-16T00:00:00.000Z");
   const start = reset - SEVEN_DAY_MS;
