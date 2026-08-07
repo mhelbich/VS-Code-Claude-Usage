@@ -53,7 +53,7 @@ test("getWeeklyForecast returns null when weekly reset data is unavailable", () 
   assert.equal(getWeeklyForecast({ seven_day: { utilization: 25, resets_at: null } }), null);
 });
 
-test("getWeeklyForecast projects the weekly end utilization and hit time", () => {
+test("getWeeklyForecast uses the regularized baseline for weekly projection", () => {
   const forecast = getWeeklyForecast(
     {
       seven_day: { utilization: 40, resets_at: "2026-03-23T00:00:00.000Z" },
@@ -65,10 +65,11 @@ test("getWeeklyForecast projects the weekly end utilization and hit time", () =>
   assert.equal(forecast.start, Date.parse("2026-03-16T00:00:00.000Z"));
   assert.equal(forecast.reset, Date.parse("2026-03-23T00:00:00.000Z"));
   assert.equal(forecast.currentUtilization, 40);
-  assert.equal(forecast.projectedUtilizationAtReset, 140);
-  assert.equal(forecast.projectedRemainingAtReset, -40);
-  assert.equal(forecast.projectedLimitHitAt, Date.parse("2026-03-21T00:00:00.000Z"));
+  assert.equal(forecast.projectedUtilizationAtReset, 125.71428571428571);
+  assert.equal(forecast.projectedRemainingAtReset, -25.714285714285708);
+  assert.equal(forecast.projectedLimitHitAt, Date.parse("2026-03-21T12:00:00.000Z"));
   assert.equal(forecast.status, "risk");
+  assert.equal(forecast.method, "baseline");
 });
 
 test("getWeeklyForecast stays safe when usage is on pace or zero", () => {
@@ -91,7 +92,7 @@ test("getWeeklyForecast stays safe when usage is on pace or zero", () => {
   );
 
   assert.ok(zero);
-  assert.equal(zero.projectedUtilizationAtReset, 0);
+  assert.equal(zero.projectedUtilizationAtReset, 35.714285714285715);
   assert.equal(zero.projectedLimitHitAt, null);
 });
 
@@ -179,7 +180,7 @@ test("buildTooltipMarkdown renders all enabled sections", () => {
   assert.match(tooltip, /\*\*Fable \(7d\)\*\*/);
   assert.match(tooltip, /\*\*Extra usage:\*\* 25 \/ 100 credits/);
   assert.match(tooltip, /Resets in 2h 30m \(2026-03-16T12:30:00.000Z\)/);
-  assert.match(tooltip, /Forecast: projected remaining at reset is 1\.8%/);
+  assert.match(tooltip, /Forecast: 1\.6% remaining at reset · Baseline/);
   assert.match(tooltip, /│/);
   assert.match(tooltip, /Click to refresh/);
 });
@@ -216,7 +217,7 @@ test("buildTooltipMarkdown shows used % and 'used' label when showUsed is true",
 
   assert.match(tooltip, /\*\*25\.0%\*\* used/);
   assert.match(tooltip, /\*\*70\.0%\*\* used/);
-  assert.match(tooltip, /Forecast: projected usage at reset is 98\.2%/);
+  assert.match(tooltip, /Forecast: 98\.4% used at reset · Baseline/);
   assert.doesNotMatch(tooltip, /remaining/);
 });
 
@@ -247,7 +248,7 @@ test("buildTooltipMarkdown shows remaining % and 'remaining' label when showUsed
 
   assert.match(tooltip, /\*\*75\.0%\*\* remaining/);
   assert.match(tooltip, /\*\*30\.0%\*\* remaining/);
-  assert.match(tooltip, /Forecast: projected remaining at reset is 1\.8%/);
+  assert.match(tooltip, /Forecast: 1\.6% remaining at reset · Baseline/);
   assert.doesNotMatch(tooltip, / used/);
 });
 
@@ -264,5 +265,5 @@ test("buildTooltipMarkdown warns when the weekly limit projects to hit before re
     false,
   );
 
-  assert.match(tooltip, /Forecast: At current pace, remaining projects to reach 0 in 58h 40m \(2026-03-20T10:40:00.000Z\) before reset\./);
+  assert.match(tooltip, /Forecast: Limit in 71h 46m \(2026-03-20T23:46:01\.165Z\) · Baseline/);
 });

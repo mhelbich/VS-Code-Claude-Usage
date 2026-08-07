@@ -170,8 +170,9 @@ test("forecastStateToBarProps: renders safe weekly forecast chip", () => {
   assert.equal(props.tooltipIsMarkdown, true);
   assert.match(props.tooltipText, /### Weekly Forecast/);
   assert.match(props.tooltipText, /🟢 \*\*On track\*\*/);
-  assert.match(props.tooltipText, /Projected at reset: \*\*30\.0% remaining\*\*/);
-  assert.match(props.tooltipText, /Your current weekly pace looks safe\./);
+  assert.match(props.tooltipText, /Projected at reset: \*\*19\.3% remaining\*\*/);
+  assert.match(props.tooltipText, /Based on: \*\*Baseline\*\*/);
+  assert.match(props.tooltipText, /Weekly usage looks on track\./);
   assert.match(props.tooltipText, /Reset: \*\*120h 0m/);
 });
 
@@ -192,7 +193,7 @@ test("forecastStateToBarProps: renders risk weekly forecast chip", () => {
   assert.equal(props.text, "$(circle-filled)");
   assert.equal(props.color, "charts.red");
   assert.match(props.tooltipText, /🔴 \*\*Limit risk\*\*/);
-  assert.match(props.tooltipText, /weekly limit may be reached/);
+  assert.match(props.tooltipText, /Limit: \*\*/);
   assert.match(props.tooltipText, /Projected at reset: \*\*100\.0% used\*\*/);
   assert.match(props.tooltipText, /Reset: \*\*120h 0m/);
 });

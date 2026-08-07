@@ -1,5 +1,5 @@
 import type { ColorThresholds, UsageResponse } from "./types.js";
-import { FIVE_HOUR_MS, getSessionForecast, getWeeklyForecast, parseIsoTime, type ForecastStatus, type UsageForecast } from "./forecast.js";
+import { describeForecastMethod, FIVE_HOUR_MS, getSessionForecast, getWeeklyForecast, parseIsoTime, type ForecastStatus, type UsageForecast } from "./forecast.js";
 import { getScopedWeeklyLimits } from "./scopedLimits.js";
 
 type ResetFormatOptions = {
@@ -103,16 +103,15 @@ export function makeUsageBar(utilization: number, t: ColorThresholds, width = 20
 }
 
 function formatForecastSummary(forecast: UsageForecast, showUsed: boolean, options?: ResetFormatOptions): string {
+  const method = describeForecastMethod(forecast);
   if (forecast.projectedLimitHitAt !== null) {
     const projectedHit = formatReset(new Date(forecast.projectedLimitHitAt).toISOString(), options);
-    return showUsed
-      ? `Forecast: At current pace, limit projects to hit in ${projectedHit} before reset.`
-      : `Forecast: At current pace, remaining projects to reach 0 in ${projectedHit} before reset.`;
+    return `Forecast: Limit in ${projectedHit} · ${method}`;
   }
 
   return showUsed
-    ? `Forecast: projected usage at reset is ${clampPct(forecast.projectedUtilizationAtReset).toFixed(1)}%.`
-    : `Forecast: projected remaining at reset is ${clampPct(forecast.projectedRemainingAtReset).toFixed(1)}%.`;
+    ? `Forecast: ${clampPct(forecast.projectedUtilizationAtReset).toFixed(1)}% used at reset · ${method}`
+    : `Forecast: ${clampPct(forecast.projectedRemainingAtReset).toFixed(1)}% remaining at reset · ${method}`;
 }
 
 export function buildStatusText(usage: UsageResponse, t: ColorThresholds, showUsed = false, now = Date.now()): string {
@@ -149,9 +148,16 @@ function formatUsageBucket(
   return `**${heading}**\n\n` + `${bar} **${displayValue.toFixed(1)}%** ${label}\n\n` + resetLine + forecastLine;
 }
 
-export function buildTooltipMarkdown(usage: UsageResponse, t: ColorThresholds, options?: ResetFormatOptions, showUsed = false, showScopedWeeklyLimits = true): string {
+export function buildTooltipMarkdown(
+  usage: UsageResponse,
+  t: ColorThresholds,
+  options?: ResetFormatOptions,
+  showUsed = false,
+  showScopedWeeklyLimits = true,
+  providedWeeklyForecast?: UsageForecast | null,
+): string {
   const { five_hour: session, seven_day: week, extra_usage: extra } = usage;
-  const weeklyForecast = getWeeklyForecast(usage, options?.now);
+  const weeklyForecast = providedWeeklyForecast === undefined ? getWeeklyForecast(usage, options?.now) : providedWeeklyForecast;
   const sessionForecast = getSessionForecast(usage, options?.now);
 
   let markdown = "### Claude Code Usage\n\n";

@@ -30,6 +30,7 @@
 
   let allEntries = window.__INITIAL_ENTRIES__ || [];
   let showUsed   = window.__INITIAL_SHOW_USED__ ?? true;
+  let weeklyForecast = window.__INITIAL_FORECAST__ || null;
   let overlayDefaults = window.__INITIAL_SETTINGS__ || {
     showSessionResetMarkers: true,
     showWeeklyResetMarkers: true,
@@ -101,7 +102,9 @@
         drawVerticalMarkers(ctx, xScale, chartArea, overlayState.weeklyResets, '#569CD688', [8, 4]);
       }
       if (overlayState.showWeeklyForecast && overlayState.weeklyForecast) {
-        drawForecastLabel(ctx, xScale, yScale, chartArea, overlayState.weeklyForecast.projectedEnd, overlayState.weeklyForecast.projectedLabel, overlayState.weeklyForecast.warning ? warnFg : forecastSafeFg);
+        if (overlayState.weeklyForecast.projectedEnd) {
+          drawForecastLabel(ctx, xScale, yScale, chartArea, overlayState.weeklyForecast.projectedEnd, overlayState.weeklyForecast.projectedLabel, forecastSafeFg);
+        }
         if (overlayState.weeklyForecast.hitPoint) {
           drawForecastLabel(ctx, xScale, yScale, chartArea, overlayState.weeklyForecast.hitPoint, 'limit hit', warnFg);
         }
@@ -277,32 +280,6 @@
     return values.sort((a, b) => a - b);
   }
 
-  function getWeeklyForecast(entries, now) {
-    const latest = [...entries].reverse().find(entry => entry.seven_day !== null && parseIsoTime(entry.seven_day_resets_at) !== null);
-    if (!latest) return null;
-
-    const weeklyReset = parseIsoTime(latest.seven_day_resets_at);
-    if (weeklyReset === null || now >= weeklyReset || latest.seven_day === null) return null;
-
-    const weeklyStart = weeklyReset - SEVEN_DAY_MS;
-    const elapsedMs = now - weeklyStart;
-    if (elapsedMs <= 0) return null;
-
-    const currentUsed = latest.seven_day;
-    const elapsedRatio = elapsedMs / SEVEN_DAY_MS;
-    const projectedUsedAtReset = currentUsed / elapsedRatio;
-    const projectedHitAt = currentUsed > 0 && projectedUsedAtReset > 100
-      ? weeklyStart + (elapsedMs * 100) / currentUsed
-      : null;
-
-    return {
-      weeklyStart,
-      weeklyReset,
-      projectedUsedAtReset,
-      projectedHitAt: projectedHitAt !== null && projectedHitAt < weeklyReset ? projectedHitAt : null,
-    };
-  }
-
   function formatDuration(targetMs, now) {
     const diff = targetMs - now;
     if (diff <= 0) return 'resetting…';
@@ -323,21 +300,22 @@
     if (!forecast) {
       return { text: 'Weekly forecast: —', warning: false };
     }
-    if (forecast.projectedHitAt !== null) {
-      const hitText = formatDuration(forecast.projectedHitAt, now);
+    const method = forecast.method === 'personalized'
+      ? `Personalized (${forecast.historyWeeks} week${forecast.historyWeeks === 1 ? '' : 's'}${forecast.historyBlend < 1 ? ' + baseline' : ''})`
+      : 'Baseline';
+    if (forecast.projectedLimitHitAt !== null) {
+      const hitText = formatDuration(forecast.projectedLimitHitAt, now);
       return {
-        text: showUsed
-          ? `Weekly forecast: limit projects to hit in ${hitText} before reset.`
-          : `Weekly forecast: remaining projects to reach 0 in ${hitText} before reset.`,
+        text: `Weekly forecast: Limit in ${hitText} · ${method}`,
         warning: true,
       };
     }
 
-    const projectedValue = showUsed ? forecast.projectedUsedAtReset : 100 - forecast.projectedUsedAtReset;
+    const projectedValue = showUsed ? forecast.projectedUtilizationAtReset : forecast.projectedRemainingAtReset;
     return {
       text: showUsed
-        ? `Weekly forecast: projected usage at reset ${projectedValue.toFixed(1)}%.`
-        : `Weekly forecast: projected remaining at reset ${projectedValue.toFixed(1)}%.`,
+        ? `Weekly forecast: ${projectedValue.toFixed(1)}% used at reset · ${method}`
+        : `Weekly forecast: ${projectedValue.toFixed(1)}% remaining at reset · ${method}`,
       warning: false,
     };
   }
@@ -458,18 +436,20 @@
   function buildForecastDatasets(forecast) {
     if (!forecast) return [];
 
-    const projectionColor = forecast.projectedHitAt !== null ? warnFg : forecastSafeFg;
+    const projectionColor = forecast.projectedLimitHitAt !== null ? warnFg : forecastSafeFg;
+    const projectionEndX = forecast.projectedLimitHitAt ?? forecast.reset;
+    const projectionEndUsed = forecast.projectedLimitHitAt !== null ? 100 : forecast.projectedUtilizationAtReset;
     const idealData = sampleLinePoints(
-      forecast.weeklyStart,
+      forecast.start,
       toDisplayPct(0),
-      forecast.weeklyReset,
+      forecast.reset,
       toDisplayPct(100),
     );
     const projectionData = sampleLinePoints(
-      forecast.weeklyStart,
-      toDisplayPct(0),
-      forecast.weeklyReset,
-      toDisplayPct(forecast.projectedUsedAtReset),
+      forecast.calculatedAt,
+      toDisplayPct(forecast.currentUtilization),
+      projectionEndX,
+      toDisplayPct(projectionEndUsed),
     );
 
     const datasets = [
@@ -506,10 +486,10 @@
       },
     ];
 
-    if (forecast.projectedHitAt !== null) {
+    if (forecast.projectedLimitHitAt !== null) {
       datasets.push({
         label: 'Projected early limit hit',
-        data: [{ x: forecast.projectedHitAt, y: toDisplayPct(100) }],
+        data: [{ x: forecast.projectedLimitHitAt, y: toDisplayPct(100) }],
         yAxisID: 'yPct',
         showLine: false,
         borderColor: warnFg,
@@ -620,7 +600,6 @@
     const latestLimit = [...allEntries].reverse().find(e => e.extra_limit !== null)?.extra_limit;
     if (latestLimit != null) chart.options.scales.yCredits.max = latestLimit;
 
-    const weeklyForecast = getWeeklyForecast(allEntries, now);
     const showWeeklyForecast = getEffectiveSetting('showWeeklyForecast');
     chart.data.labels = [];
     chart.data.datasets = [
@@ -640,17 +619,19 @@
       weeklyResets: getDistinctMarkers(allEntries, entry => parseIsoTime(entry.seven_day_resets_at)),
       weeklyForecast: showWeeklyForecast && weeklyForecast
         ? {
-            warning: weeklyForecast.projectedHitAt !== null,
-            projectedEnd: {
-              x: weeklyForecast.weeklyReset,
-              y: toDisplayPct(weeklyForecast.projectedUsedAtReset),
-            },
-            projectedLabel: showUsed
-              ? `${Math.max(0, weeklyForecast.projectedUsedAtReset).toFixed(0)}% used`
-              : `${Math.max(0, 100 - weeklyForecast.projectedUsedAtReset).toFixed(0)}% left`,
-            hitPoint: weeklyForecast.projectedHitAt !== null
+            warning: weeklyForecast.projectedLimitHitAt !== null,
+            projectedEnd: weeklyForecast.projectedLimitHitAt === null
               ? {
-                  x: weeklyForecast.projectedHitAt,
+                  x: weeklyForecast.reset,
+                  y: toDisplayPct(weeklyForecast.projectedUtilizationAtReset),
+                }
+              : null,
+            projectedLabel: showUsed
+              ? `${Math.max(0, weeklyForecast.projectedUtilizationAtReset).toFixed(0)}% used`
+              : `${Math.max(0, weeklyForecast.projectedRemainingAtReset).toFixed(0)}% left`,
+            hitPoint: weeklyForecast.projectedLimitHitAt !== null
+              ? {
+                  x: weeklyForecast.projectedLimitHitAt,
                   y: toDisplayPct(100),
                 }
               : null,
@@ -691,6 +672,7 @@
       allEntries = e.data.entries;
       showUsed   = e.data.showUsed ?? showUsed;
       overlayDefaults = e.data.settings ?? overlayDefaults;
+      weeklyForecast = e.data.forecast ?? null;
       setToggleState();
       render();
     }
