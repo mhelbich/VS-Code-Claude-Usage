@@ -73,6 +73,14 @@ function classifyForecast(projectedUtilizationAtReset: number, confidence: Forec
   return "safe";
 }
 
+export function describeForecastMethod(forecast: Pick<UsageForecast, "method" | "historyWeeks" | "historyBlend">): string {
+  if (forecast.method === "linear") return "Linear";
+  if (forecast.method === "baseline") return "Baseline";
+  if (forecast.method !== "personalized") return "Unavailable";
+  const weeks = `${forecast.historyWeeks} week${forecast.historyWeeks === 1 ? "" : "s"}`;
+  return forecast.historyBlend < 1 ? `Personalized (${weeks} + baseline)` : `Personalized (${weeks})`;
+}
+
 function projectedHitTime(now: number, reset: number, current: number, projected: number): number | null {
   if (current >= 100) return now;
   if (projected <= 100 || projected <= current) return null;

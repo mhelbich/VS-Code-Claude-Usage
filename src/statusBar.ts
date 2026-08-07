@@ -1,6 +1,6 @@
 import type { ColorThresholds, UsageResponse } from "./types.js";
 import { buildStatusText, buildTooltipMarkdown, formatReset } from "./render.js";
-import { getWeeklyForecast, type ForecastStatus, type UsageForecast } from "./forecast.js";
+import { describeForecastMethod, getWeeklyForecast, type ForecastStatus, type UsageForecast } from "./forecast.js";
 
 export type State =
   | { kind: "loading" }
@@ -59,9 +59,7 @@ function formatForecastTooltip(forecast: NonNullable<ReturnType<typeof getWeekly
   const projectedLabel = showUsed ? "used" : "remaining";
   const projectedLine = `Projected at reset: **${clampPct(projectedValue).toFixed(1)}% ${projectedLabel}**`;
   const resetLine = `Reset: **${formatReset(new Date(forecast.reset).toISOString(), { now })}**`;
-  const methodLine = forecast.method === "personalized"
-    ? `Based on: **Personalized · ${forecast.historyWeeks} week${forecast.historyWeeks === 1 ? "" : "s"}${forecast.historyBlend < 1 ? " + baseline" : ""}**`
-    : "Based on: **Baseline**";
+  const methodLine = `Based on: **${describeForecastMethod(forecast)}**`;
 
   if (forecast.projectedLimitHitAt !== null) {
     const hitLine = `Limit: **${formatReset(new Date(forecast.projectedLimitHitAt).toISOString(), { now })}**`;

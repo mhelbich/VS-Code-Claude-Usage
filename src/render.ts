@@ -1,5 +1,5 @@
 import type { ColorThresholds, UsageResponse } from "./types.js";
-import { FIVE_HOUR_MS, getSessionForecast, getWeeklyForecast, parseIsoTime, type ForecastStatus, type UsageForecast } from "./forecast.js";
+import { describeForecastMethod, FIVE_HOUR_MS, getSessionForecast, getWeeklyForecast, parseIsoTime, type ForecastStatus, type UsageForecast } from "./forecast.js";
 import { getScopedWeeklyLimits } from "./scopedLimits.js";
 
 type ResetFormatOptions = {
@@ -103,9 +103,7 @@ export function makeUsageBar(utilization: number, t: ColorThresholds, width = 20
 }
 
 function formatForecastSummary(forecast: UsageForecast, showUsed: boolean, options?: ResetFormatOptions): string {
-  const method = forecast.method === "personalized"
-    ? `Personalized (${forecast.historyWeeks} week${forecast.historyWeeks === 1 ? "" : "s"})`
-    : forecast.method === "baseline" ? "Baseline" : "Linear";
+  const method = describeForecastMethod(forecast);
   if (forecast.projectedLimitHitAt !== null) {
     const projectedHit = formatReset(new Date(forecast.projectedLimitHitAt).toISOString(), options);
     return `Forecast: Limit in ${projectedHit} · ${method}`;
