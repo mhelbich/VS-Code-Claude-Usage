@@ -1,4 +1,5 @@
 import { execSync } from "child_process";
+import { createHash } from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -26,6 +27,18 @@ export interface CredentialDependencies {
   execSync: (command: string, options: { stdio: ["pipe", "pipe", "pipe"] }) => string | Buffer;
   readFileSync: (path: string, encoding: "utf8") => string;
   now: () => number;
+}
+
+const KEYCHAIN_SERVICE = "Claude Code-credentials";
+
+// With CLAUDE_CONFIG_DIR set, Claude Code refreshes only the suffixed entry; the base one goes stale.
+export function getKeychainServiceNames(configDir: string | undefined): string[] {
+  if (!configDir) {
+    return [KEYCHAIN_SERVICE];
+  }
+
+  const suffix = createHash("sha256").update(configDir.normalize("NFC")).digest("hex").slice(0, 8);
+  return [`${KEYCHAIN_SERVICE}-${suffix}`, KEYCHAIN_SERVICE];
 }
 
 export function parseClaudeCredentials(raw: string): ClaudeCredentials {
@@ -56,19 +69,19 @@ function getAccessTokenFromRaw(raw: string, now: number): string | null {
 export function getAccessTokenWithDependencies(deps: CredentialDependencies): string | null {
   // macOS: read from Keychain
   if (deps.platform === "darwin") {
-    try {
-      const raw = deps.execSync('security find-generic-password -s "Claude Code-credentials" -w', {
-        stdio: ["pipe", "pipe", "pipe"],
-      })
-        .toString()
-        .trim();
+    for (const service of getKeychainServiceNames(deps.configDir)) {
+      try {
+        const raw = deps.execSync(`security find-generic-password -s "${service}" -w`, {
+          stdio: ["pipe", "pipe", "pipe"],
+        })
+          .toString()
+          .trim();
 
-      const token = getAccessTokenFromRaw(raw, deps.now());
-      if (token) {
-        return token;
-      }
-    } catch {
-      // fall through to file-based fallback
+        const token = getAccessTokenFromRaw(raw, deps.now());
+        if (token) {
+          return token;
+        }
+      } catch {}
     }
   }
 
