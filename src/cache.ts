@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { resolveCredentialsConfigDir } from "./credentials";
 import type { UsageResponse } from "./types";
 
 /**
@@ -88,8 +89,10 @@ export function isCacheFresh(entry: CacheEntry, intervalSeconds: number, now = D
 
 // ─── Simple public API (uses the real filesystem) ────────────────────────────
 
+// Resolved once at module load, not per-call — env vars don't change mid-process, matching
+// the one-time resolution the extension itself does for the same purpose elsewhere.
 const realDeps: CacheDependencies = {
-  configDir: process.env.CLAUDE_CONFIG_DIR,
+  configDir: resolveCredentialsConfigDir(process.env),
   homedir: () => os.homedir(),
   joinPath: path.join,
   readFileSync: fs.readFileSync,
