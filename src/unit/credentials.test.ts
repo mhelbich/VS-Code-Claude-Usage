@@ -6,6 +6,7 @@ import {
   getAccessTokenFromCredentials,
   getAccessTokenWithDependencies,
   getCredentialFilePath,
+  getKeychainServiceNames,
   parseClaudeCredentials,
 } from "../credentials";
 
@@ -52,6 +53,72 @@ test("getAccessTokenFromCredentials returns null when there is no access token",
     }),
     null,
   );
+});
+
+test("getKeychainServiceNames returns the base service when no config dir is set", () => {
+  assert.deepEqual(getKeychainServiceNames(undefined), ["Claude Code-credentials"]);
+});
+
+test("getKeychainServiceNames puts the config-dir-suffixed service before the base one", () => {
+  assert.deepEqual(getKeychainServiceNames("/custom/claude"), ["Claude Code-credentials-7427f042", "Claude Code-credentials"]);
+});
+
+test("getKeychainServiceNames hashes the NFC form of the config dir", () => {
+  const composed = "/Users/andr\u00e9/.claude";
+  const decomposed = "/Users/andre\u0301/.claude";
+
+  assert.notEqual(composed, decomposed);
+  assert.deepEqual(getKeychainServiceNames(decomposed), getKeychainServiceNames(composed));
+});
+
+test("getAccessTokenWithDependencies reads the config-dir-suffixed keychain entry first", () => {
+  const queriedServices: string[] = [];
+
+  const token = getAccessTokenWithDependencies({
+    platform: "darwin",
+    configDir: "/custom/claude",
+    homedir: () => "/home/test",
+    joinPath: (...parts) => parts.join("/"),
+    execSync: (command: string) => {
+      queriedServices.push(command);
+      return Buffer.from(JSON.stringify(validCredentials));
+    },
+    readFileSync: () => {
+      throw new Error("should not be read");
+    },
+    now: () => 1_000,
+  });
+
+  assert.equal(token, "valid-token");
+  assert.deepEqual(queriedServices, ['security find-generic-password -s "Claude Code-credentials-7427f042" -w']);
+});
+
+test("getAccessTokenWithDependencies falls back to the base keychain entry when the suffixed one is missing", () => {
+  const queriedServices: string[] = [];
+
+  const token = getAccessTokenWithDependencies({
+    platform: "darwin",
+    configDir: "/custom/claude",
+    homedir: () => "/home/test",
+    joinPath: (...parts) => parts.join("/"),
+    execSync: (command: string) => {
+      queriedServices.push(command);
+      if (command.includes("Claude Code-credentials-7427f042")) {
+        throw new Error("The specified item could not be found in the keychain.");
+      }
+      return Buffer.from(JSON.stringify(validCredentials));
+    },
+    readFileSync: () => {
+      throw new Error("should not be read");
+    },
+    now: () => 1_000,
+  });
+
+  assert.equal(token, "valid-token");
+  assert.deepEqual(queriedServices, [
+    'security find-generic-password -s "Claude Code-credentials-7427f042" -w',
+    'security find-generic-password -s "Claude Code-credentials" -w',
+  ]);
 });
 
 test("getAccessTokenWithDependencies uses the macOS keychain when it returns a valid token", () => {
