@@ -2,6 +2,13 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [0.3.3] - 2026-09-18
+
+### Fixed
+
+- macOS: the extension now finds the config-dir-suffixed Keychain entry Claude Code writes when `CLAUDE_CONFIG_DIR` is set, instead of only checking the unsuffixed entry and reporting a stale "no valid access token" warning after every refresh (thanks @giorgiolorini).
+- Credential lookup and the shared usage cache now also follow `CLAUDE_SECURESTORAGE_CONFIG_DIR` when set, matching Claude Code's own resolution order. Previously, running multiple Claude accounts side by side on one machine (Anthropic's supported multi-account setup) could read a stale token or cause two sessions to overwrite each other's cached usage data.
+
 ## [0.3.2] - 2026-08-07
 
 ### Changed
