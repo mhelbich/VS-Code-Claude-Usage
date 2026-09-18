@@ -66,6 +66,23 @@ function getAccessTokenFromRaw(raw: string, now: number): string | null {
   return getAccessTokenFromCredentials(parseClaudeCredentials(raw), now);
 }
 
+/**
+ * Resolves which directory Claude Code's own credential store follows.
+ * CLAUDE_SECURESTORAGE_CONFIG_DIR overrides CLAUDE_CONFIG_DIR for this purpose when set —
+ * including when set to an empty string, which pins the default store even if
+ * CLAUDE_CONFIG_DIR points elsewhere. See https://github.com/anthropics/claude-code/issues/79223.
+ */
+export function resolveCredentialsConfigDir(env: {
+  CLAUDE_SECURESTORAGE_CONFIG_DIR?: string;
+  CLAUDE_CONFIG_DIR?: string;
+}): string | undefined {
+  if (env.CLAUDE_SECURESTORAGE_CONFIG_DIR !== undefined) {
+    return env.CLAUDE_SECURESTORAGE_CONFIG_DIR || undefined;
+  }
+
+  return env.CLAUDE_CONFIG_DIR;
+}
+
 export function getAccessTokenWithDependencies(deps: CredentialDependencies): string | null {
   // macOS: read from Keychain
   if (deps.platform === "darwin") {
@@ -97,13 +114,13 @@ export function getAccessTokenWithDependencies(deps: CredentialDependencies): st
 }
 
 /**
- * Looks up the Claude access token, first trying to read from the macOS Keychain (if on macOS), and then falling back to reading from a .credentials.json file in the user's home directory (or a custom path defined by the CLAUDE_CONFIG_DIR environment variable). Returns the access token if found and valid, or null if not found or expired.
+ * Looks up the Claude access token, first trying to read from the macOS Keychain (if on macOS), and then falling back to reading from a .credentials.json file in the user's home directory (or a custom path defined by the CLAUDE_CONFIG_DIR / CLAUDE_SECURESTORAGE_CONFIG_DIR environment variables). Returns the access token if found and valid, or null if not found or expired.
  * This function abstracts away the platform-specific details of how credentials are stored and accessed, providing a simple interface for the rest of the extension to retrieve the necessary token for API calls.
  */
 export function getAccessToken(): string | null {
   return getAccessTokenWithDependencies({
     platform: process.platform,
-    configDir: process.env.CLAUDE_CONFIG_DIR,
+    configDir: resolveCredentialsConfigDir(process.env),
     homedir: () => os.homedir(),
     joinPath: path.join,
     execSync,
