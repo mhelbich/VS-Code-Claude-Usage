@@ -1,6 +1,15 @@
 import * as fs from "fs";
 import * as path from "path";
+import { withConfigDirSuffix } from "./credentials.js";
 import type { HistoryEntry } from "./types.js";
+
+/**
+ * Global storage is shared by every VS Code profile, so each Claude config dir (account) gets its
+ * own history file. The default config dir keeps the original file name.
+ */
+export function getHistoryFileName(configDir: string | undefined): string {
+  return `${withConfigDirSuffix("usage-history", configDir)}.json`;
+}
 
 export interface HistoryDependencies {
   readFileSync: (filePath: string, encoding?: "utf8") => string;
@@ -37,15 +46,15 @@ export function appendHistoryWithDependencies(filePath: string, entry: HistoryEn
 // ─── Concrete class using the real filesystem ─────────────────────────────────
 
 export class HistoryStore {
-  private readonly filePath: string;
+  private readonly getFilePath: () => string;
   private readonly log: (msg: string) => void;
 
   /**
-   * @param filePath Absolute path to usage-history.json (caller resolves vscode.Uri)
+   * @param getFilePath Returns the absolute path of the current account's history file (caller resolves vscode.Uri)
    * @param getRetentionDays Callback that returns the current retention setting (injected to avoid vscode import)
    */
-  constructor(filePath: string, log: (msg: string) => void, getRetentionDays: () => number) {
-    this.filePath = filePath;
+  constructor(getFilePath: () => string, log: (msg: string) => void, getRetentionDays: () => number) {
+    this.getFilePath = getFilePath;
     this.log = log;
     this._getRetentionDays = getRetentionDays;
   }
@@ -67,10 +76,10 @@ export class HistoryStore {
   }
 
   read(): HistoryEntry[] {
-    return readHistoryWithDependencies(this.filePath, this.deps);
+    return readHistoryWithDependencies(this.getFilePath(), this.deps);
   }
 
   append(entry: HistoryEntry): void {
-    appendHistoryWithDependencies(this.filePath, entry, this.deps);
+    appendHistoryWithDependencies(this.getFilePath(), entry, this.deps);
   }
 }
