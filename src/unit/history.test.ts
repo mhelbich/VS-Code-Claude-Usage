@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { HistoryDependencies, readHistoryWithDependencies, appendHistoryWithDependencies } from "../history.js";
+import { HistoryDependencies, readHistoryWithDependencies, appendHistoryWithDependencies, getHistoryFileName } from "../history.js";
 import type { HistoryEntry } from "../types.js";
 
 const sample: HistoryEntry = {
@@ -32,6 +32,17 @@ function makeDeps(overrides: Partial<HistoryDependencies> = {}): HistoryDependen
     ...overrides,
   };
 }
+
+// ─── getHistoryFileName ────────────────────────────────────────────────────────
+
+test("getHistoryFileName keeps the original file for the default config dir", () => {
+  assert.equal(getHistoryFileName(undefined), "usage-history.json");
+});
+
+test("getHistoryFileName gives each config dir its own file", () => {
+  assert.equal(getHistoryFileName("/custom/claude"), "usage-history-7427f042.json");
+  assert.notEqual(getHistoryFileName("/home/test/.claude-work"), getHistoryFileName("/custom/claude"));
+});
 
 // ─── readHistoryWithDependencies ───────────────────────────────────────────────
 

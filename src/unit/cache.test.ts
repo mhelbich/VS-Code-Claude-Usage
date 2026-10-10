@@ -27,8 +27,9 @@ test("getCacheFilePath falls back to ~/.claude/usage-cache.json", () => {
 });
 
 // ─── configDir resolution seam (CLAUDE_SECURESTORAGE_CONFIG_DIR / CLAUDE_CONFIG_DIR) ──────────
-// The real cache file path is built from `resolveCredentialsConfigDir(process.env)`, the same
-// resolution `getAccessToken()` uses, so two concurrent sessions with different resolved config
+// The real cache file path is built from `getClaudeConfigDir()` (the process environment with the
+// `claudeCode.environmentVariables` setting applied, then `resolveCredentialsConfigDir`), the same
+// config dir `getAccessToken()` is given, so two concurrent sessions with different resolved config
 // dirs (e.g. differing only by CLAUDE_SECURESTORAGE_CONFIG_DIR) get separate cache files instead
 // of colliding on the same one.
 

@@ -1,6 +1,12 @@
 import * as vscode from "vscode";
+import { applyClaudeCodeEnvironment, resolveCredentialsConfigDir, type ClaudeCodeEnvironmentVariable } from "./credentials";
 
 export const CONFIG_SECTION = "claudeUsage" as const;
+
+/**
+ * The Claude Code extension's setting for environment variables passed to Claude, such as CLAUDE_CONFIG_DIR.
+ */
+export const CLAUDE_CODE_ENVIRONMENT_SETTING = "claudeCode.environmentVariables" as const;
 
 /**
  * Interface for the extension's configuration settings.
@@ -82,4 +88,13 @@ export function getClaudeUsageConfiguration(): vscode.WorkspaceConfiguration {
  */
 export function getClaudeUsageSetting<K extends ClaudeUsageConfigKey>(key: K): ClaudeUsageConfiguration[K] {
   return getClaudeUsageConfiguration().get<ClaudeUsageConfiguration[K]>(CONFIG_KEYS[key]) ?? CONFIG_DEFAULTS[key];
+}
+
+/**
+ * Resolves the Claude config dir the way Claude Code launched from this window would see it:
+ * the process environment, overridden by the `claudeCode.environmentVariables` setting.
+ */
+export function getClaudeConfigDir(): string | undefined {
+  const variables = vscode.workspace.getConfiguration().get<ClaudeCodeEnvironmentVariable[]>(CLAUDE_CODE_ENVIRONMENT_SETTING);
+  return resolveCredentialsConfigDir(applyClaudeCodeEnvironment(process.env, variables));
 }

@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
 import { fetchUsage } from "./api";
 import { isCacheFresh, readCache, writeCache } from "./cache";
-import { COMMANDS, CONFIG_PATHS, getClaudeUsageSetting } from "./config";
-import { getAccessToken } from "./credentials";
+import { CLAUDE_CODE_ENVIRONMENT_SETTING, COMMANDS, CONFIG_PATHS, getClaudeConfigDir, getClaudeUsageSetting } from "./config";
+import { getAccessToken, withConfigDirSuffix } from "./credentials";
 import { EMPTY_FORECAST_PROFILE, getWeeklyForecast, updateForecastProfile, type ForecastProfile } from "./forecast";
-import { HistoryStore } from "./history";
+import { getHistoryFileName, HistoryStore } from "./history";
 import { getScopedWeeklyLimits } from "./scopedLimits";
 import { Action, BarProps, State, forecastStateToBarProps, reduce, stateToBarProps } from "./statusBar";
 import type { HistoryEntry, UsageResponse } from "./types";
@@ -49,8 +49,11 @@ export function activate(ctx: vscode.ExtensionContext) {
   const log = vscode.window.createOutputChannel("Claude Code Usage", { log: true });
   ctx.subscriptions.push(log);
 
+  // Only the claudeCode.environmentVariables setting can change this at runtime; see the listener below.
+  let configDir = getClaudeConfigDir();
+
   const historyStore = new HistoryStore(
-    vscode.Uri.joinPath(ctx.globalStorageUri, "usage-history.json").fsPath,
+    () => vscode.Uri.joinPath(ctx.globalStorageUri, getHistoryFileName(configDir)).fsPath,
     (msg) => log.warn(msg),
     () => getClaudeUsageSetting("historyRetentionDays"),
   );
@@ -73,14 +76,20 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   let state: State = { kind: "loading" };
-  const forecastProfileKey = "weeklyForecastProfile.v1";
-  let forecastProfile = updateForecastProfile(
-    ctx.globalState.get<ForecastProfile>(forecastProfileKey) ?? EMPTY_FORECAST_PROFILE,
-    historyStore.read(),
-    undefined,
-    onIncompleteForecastWeek,
-  );
-  void ctx.globalState.update(forecastProfileKey, forecastProfile);
+  const forecastProfileKey = () => withConfigDirSuffix("weeklyForecastProfile.v1", configDir);
+
+  function loadForecastProfile(): ForecastProfile {
+    const profile = updateForecastProfile(
+      ctx.globalState.get<ForecastProfile>(forecastProfileKey()) ?? EMPTY_FORECAST_PROFILE,
+      historyStore.read(),
+      undefined,
+      onIncompleteForecastWeek,
+    );
+    void ctx.globalState.update(forecastProfileKey(), profile);
+    return profile;
+  }
+
+  let forecastProfile = loadForecastProfile();
 
   function getHistoryViewSettings() {
     // Keep persisted defaults in one place; the webview can still override them locally per session.
@@ -116,12 +125,13 @@ export function activate(ctx: vscode.ExtensionContext) {
     dispatch({ type: "refresh-started" });
 
     const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
-    const cached = readCache();
+    const refreshConfigDir = configDir;
+    const cached = readCache(refreshConfigDir);
     if (!force && cached && isCacheFresh(cached, intervalSeconds)) {
       const ageSeconds = Math.round((Date.now() - cached.fetchedAt) / 1000);
       log.debug(`Cache hit (${ageSeconds}s old) — skipping API call`);
       forecastProfile = updateForecastProfile(forecastProfile, [toHistoryEntry(cached.data, cached.fetchedAt)], refreshStartedAt, onIncompleteForecastWeek);
-      await ctx.globalState.update(forecastProfileKey, forecastProfile);
+      await ctx.globalState.update(forecastProfileKey(), forecastProfile);
       const forecast = getWeeklyForecast(cached.data, refreshStartedAt, forecastProfile);
       historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), forecast);
       dispatch({
@@ -137,7 +147,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
 
     log.debug("Cache missing or stale — fetching from API");
-    const token = getAccessToken();
+    const token = getAccessToken(refreshConfigDir);
     if (!token) {
       log.warn("No valid access token found — run `claude /login` to sign in");
       dispatch({ type: "no-token" });
@@ -145,13 +155,18 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
     try {
       const usage = await fetchUsage(token);
-      writeCache(usage, refreshStartedAt);
+      if (configDir !== refreshConfigDir) {
+        log.debug("Config dir changed during fetch — discarding the previous account's usage");
+        return;
+      }
+      writeCache(usage, refreshConfigDir, refreshStartedAt);
       log.info("Usage fetched successfully");
       const entry = toHistoryEntry(usage, Date.now());
       forecastProfile = updateForecastProfile(forecastProfile, [entry], entry.timestamp, onIncompleteForecastWeek);
-      await ctx.globalState.update(forecastProfileKey, forecastProfile);
       // Persist reset metadata alongside utilization so the history view can derive markers and forecasts later.
+      // Appended before the await below, so a config dir change during it can't redirect the entry.
       historyStore.append(entry);
+      await ctx.globalState.update(forecastProfileKey(), forecastProfile);
       const forecast = getWeeklyForecast(usage, entry.timestamp, forecastProfile);
       historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), forecast);
       dispatch({
@@ -185,6 +200,16 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration(CONFIG_PATHS.refreshIntervalSeconds)) {
         startTimer();
+      }
+      if (e.affectsConfiguration(CLAUDE_CODE_ENVIRONMENT_SETTING)) {
+        const updatedConfigDir = getClaudeConfigDir();
+        if (updatedConfigDir !== configDir) {
+          configDir = updatedConfigDir;
+          log.info(`Claude config dir changed — ${configDir ?? "default"}`);
+          forecastProfile = loadForecastProfile();
+          historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), null);
+          refresh(true);
+        }
       }
       if (e.affectsConfiguration(CONFIG_PATHS.warningThreshold) || e.affectsConfiguration(CONFIG_PATHS.dangerThreshold)) {
         const warning = getClaudeUsageSetting("warningThreshold");

@@ -31,14 +31,26 @@ export interface CredentialDependencies {
 
 const KEYCHAIN_SERVICE = "Claude Code-credentials";
 
+/**
+ * Suffixes a name with a short hash of the config dir, the scheme Claude Code uses for its
+ * Keychain entries, so per-account data stays apart. The default config dir keeps the bare name.
+ */
+export function withConfigDirSuffix(name: string, configDir: string | undefined): string {
+  if (!configDir) {
+    return name;
+  }
+
+  const suffix = createHash("sha256").update(configDir.normalize("NFC")).digest("hex").slice(0, 8);
+  return `${name}-${suffix}`;
+}
+
 // With CLAUDE_CONFIG_DIR set, Claude Code refreshes only the suffixed entry; the base one goes stale.
 export function getKeychainServiceNames(configDir: string | undefined): string[] {
   if (!configDir) {
     return [KEYCHAIN_SERVICE];
   }
 
-  const suffix = createHash("sha256").update(configDir.normalize("NFC")).digest("hex").slice(0, 8);
-  return [`${KEYCHAIN_SERVICE}-${suffix}`, KEYCHAIN_SERVICE];
+  return [withConfigDirSuffix(KEYCHAIN_SERVICE, configDir), KEYCHAIN_SERVICE];
 }
 
 export function parseClaudeCredentials(raw: string): ClaudeCredentials {
@@ -71,6 +83,7 @@ function getAccessTokenFromRaw(raw: string, now: number): string | null {
  * CLAUDE_SECURESTORAGE_CONFIG_DIR overrides CLAUDE_CONFIG_DIR for this purpose when set —
  * including when set to an empty string, which pins the default store even if
  * CLAUDE_CONFIG_DIR points elsewhere. See https://github.com/anthropics/claude-code/issues/79223.
+ * An empty CLAUDE_CONFIG_DIR means the default dir, not a path relative to the working directory.
  */
 export function resolveCredentialsConfigDir(env: {
   CLAUDE_SECURESTORAGE_CONFIG_DIR?: string;
@@ -80,7 +93,32 @@ export function resolveCredentialsConfigDir(env: {
     return env.CLAUDE_SECURESTORAGE_CONFIG_DIR || undefined;
   }
 
-  return env.CLAUDE_CONFIG_DIR;
+  return env.CLAUDE_CONFIG_DIR || undefined;
+}
+
+/**
+ * An entry of the Claude Code extension's `claudeCode.environmentVariables` setting.
+ */
+export interface ClaudeCodeEnvironmentVariable {
+  name: string;
+  value: string;
+}
+
+/**
+ * Layers the Claude Code extension's `claudeCode.environmentVariables` setting over the process
+ * environment, as that extension does when it launches Claude. VS Code has no per-profile process
+ * environment, so this setting is how a profile points Claude at its own config dir.
+ * Malformed entries are skipped, since the setting belongs to another extension. Windows variable
+ * names are case-insensitive, so there they are uppercased, letting the setting win over any casing.
+ */
+export function applyClaudeCodeEnvironment(
+  env: Record<string, string | undefined>,
+  variables: readonly ClaudeCodeEnvironmentVariable[] | undefined,
+  platform: NodeJS.Platform = process.platform,
+): Record<string, string | undefined> {
+  const overrides = (variables ?? []).filter((variable) => typeof variable?.name === "string" && typeof variable.value === "string");
+  const entries = [...Object.entries(env), ...overrides.map(({ name, value }) => [name, value] as const)];
+  return Object.fromEntries(platform === "win32" ? entries.map(([name, value]) => [name.toUpperCase(), value]) : entries);
 }
 
 export function getAccessTokenWithDependencies(deps: CredentialDependencies): string | null {
@@ -114,13 +152,13 @@ export function getAccessTokenWithDependencies(deps: CredentialDependencies): st
 }
 
 /**
- * Looks up the Claude access token, first trying to read from the macOS Keychain (if on macOS), and then falling back to reading from a .credentials.json file in the user's home directory (or a custom path defined by the CLAUDE_CONFIG_DIR / CLAUDE_SECURESTORAGE_CONFIG_DIR environment variables). Returns the access token if found and valid, or null if not found or expired.
+ * Looks up the Claude access token, first trying to read from the macOS Keychain (if on macOS), and then falling back to reading from a .credentials.json file in the user's home directory (or the given config dir, resolved from the CLAUDE_CONFIG_DIR / CLAUDE_SECURESTORAGE_CONFIG_DIR environment variables). Returns the access token if found and valid, or null if not found or expired.
  * This function abstracts away the platform-specific details of how credentials are stored and accessed, providing a simple interface for the rest of the extension to retrieve the necessary token for API calls.
  */
-export function getAccessToken(): string | null {
+export function getAccessToken(configDir: string | undefined): string | null {
   return getAccessTokenWithDependencies({
     platform: process.platform,
-    configDir: resolveCredentialsConfigDir(process.env),
+    configDir,
     homedir: () => os.homedir(),
     joinPath: path.join,
     execSync,
