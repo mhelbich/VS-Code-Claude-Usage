@@ -14,3 +14,5 @@ out/test/**
 out/unit/**
 .claude/**
 .github/**
+history-view/jsconfig.json
+history-view/globals.d.ts

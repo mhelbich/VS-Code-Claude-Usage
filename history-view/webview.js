@@ -1,4 +1,3 @@
-/* global Chart */
 (function () {
   // Resolve VS Code CSS variables into concrete values for Chart.js (canvas ignores CSS vars)
   const cs = getComputedStyle(document.documentElement);
