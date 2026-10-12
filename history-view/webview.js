@@ -272,7 +272,10 @@
     const seen = new Set();
     const values = [];
     for (const entry of entries) {
-      const marker = selector(entry);
+      const raw = selector(entry);
+      // Round to the minute: the API's reset times jitter by fractions of a second between responses,
+      // which would otherwise draw one marker per sample at practically the same spot.
+      const marker = raw === null ? null : Math.round(raw / 60_000) * 60_000;
       if (marker === null || seen.has(marker)) continue;
       seen.add(marker);
       values.push(marker);
