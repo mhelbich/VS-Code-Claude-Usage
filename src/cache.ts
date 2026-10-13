@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { resolveCredentialsConfigDir } from "./credentials";
 import type { UsageResponse } from "./types";
 
 /**
@@ -29,8 +28,8 @@ export interface CacheDependencies {
 }
 
 /**
- * Returns the path to the shared cache file, respecting the CLAUDE_CONFIG_DIR
- * environment variable (the same override used by the credentials file).
+ * Returns the path to the shared cache file, respecting the resolved Claude
+ * config dir (the same override used by the credentials file).
  */
 export function getCacheFilePath(configDir: string | undefined, homedir: string, joinPath: (...paths: string[]) => string): string {
   const dir = configDir ?? joinPath(homedir, ".claude");
@@ -89,21 +88,23 @@ export function isCacheFresh(entry: CacheEntry, intervalSeconds: number, now = D
 
 // ─── Simple public API (uses the real filesystem) ────────────────────────────
 
-// Resolved once at module load, not per-call — env vars don't change mid-process, matching
-// the one-time resolution the extension itself does for the same purpose elsewhere.
-const realDeps: CacheDependencies = {
-  configDir: resolveCredentialsConfigDir(process.env),
-  homedir: () => os.homedir(),
-  joinPath: path.join,
-  readFileSync: fs.readFileSync,
-  writeFileSync: fs.writeFileSync,
-  now: () => Date.now(),
-};
-
-export function readCache(): CacheEntry | null {
-  return readCacheWithDependencies(realDeps);
+// The config dir is passed per call: it can come from the `claudeCode.environmentVariables`
+// setting, which differs per VS Code profile and can change while the extension is running.
+function realDeps(configDir: string | undefined): CacheDependencies {
+  return {
+    configDir,
+    homedir: () => os.homedir(),
+    joinPath: path.join,
+    readFileSync: fs.readFileSync,
+    writeFileSync: fs.writeFileSync,
+    now: () => Date.now(),
+  };
 }
 
-export function writeCache(data: UsageResponse, fetchedAt?: number): void {
-  writeCacheWithDependencies(data, realDeps, fetchedAt);
+export function readCache(configDir: string | undefined): CacheEntry | null {
+  return readCacheWithDependencies(realDeps(configDir));
+}
+
+export function writeCache(data: UsageResponse, configDir: string | undefined, fetchedAt?: number): void {
+  writeCacheWithDependencies(data, realDeps(configDir), fetchedAt);
 }

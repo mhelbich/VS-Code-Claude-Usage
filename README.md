@@ -49,6 +49,20 @@ You must be logged in to Claude Code (`claude /login`). The extension reads your
 - Linux / WSL (reads from `~/.claude/.credentials.json`)
 - Windows (reads from `~/.claude/.credentials.json`)
 
+**Custom config dir:** When Claude Code uses another config dir (`CLAUDE_CONFIG_DIR`, or `CLAUDE_SECURESTORAGE_CONFIG_DIR`), the extension reads that dir's credentials instead. It looks at the environment VS Code was started with, overridden by the Claude Code extension's `claudeCode.environmentVariables` setting, following the same rules as that extension (for example, `CLAUDE_CONFIG_DIR` from the setting must be an absolute path). Because settings can differ per VS Code profile, this lets a profile show the usage of a separate Claude account, for example in a Work profile:
+
+```jsonc
+"claudeCode.environmentVariables": [
+  { "name": "CLAUDE_CONFIG_DIR", "value": "C:\\Users\\you\\.claude-work" }
+]
+```
+
+Claude Code launched in a terminal (`claudeCode.useTerminal`) uses the shell's environment instead, which the extension can't see.
+
+In remote windows (WSL, SSH, containers), add the setting to the remote settings (**Preferences: Open Remote Settings (JSON)**). VS Code ignores it in the local user settings there, because it is a machine-scoped setting.
+
+Usage history and the weekly forecast are kept separately for each config dir, so accounts don't mix in the History panel.
+
 ## Settings
 
 | Setting                               | Default | Description                                                        |
@@ -87,7 +101,7 @@ If `npm test` fails because another VS Code Stable instance is running, either c
 
 The extension calls the same usage endpoint that Claude Code itself uses (`https://api.anthropic.com/api/oauth/usage`) with the OAuth token stored locally by `claude`. No data ever leaves your machine beyond that single read-only API call.
 
-**Multiple windows:** When more than one VS Code window is open, each instance would otherwise poll independently, quickly exhausting the API rate limit. To avoid this, all instances share a cache file at `~/.claude/usage-cache.json`. Before making a network request, each instance checks whether the cached response is still within its configured refresh interval. If it is, the cached data is used directly and no API call is made. The instance with the shortest configured interval effectively drives the refresh rate for all windows.
+**Multiple windows:** When more than one VS Code window is open, each instance would otherwise poll independently, quickly exhausting the API rate limit. To avoid this, all instances share a cache file in the Claude config dir (`~/.claude/usage-cache.json` by default). Before making a network request, each instance checks whether the cached response is still within its configured refresh interval. If it is, the cached data is used directly and no API call is made. The instance with the shortest configured interval effectively drives the refresh rate for all windows.
 
 ## License
 
