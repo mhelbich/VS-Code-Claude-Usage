@@ -16,7 +16,7 @@ _Status bar_:
 
 - **Status bar indicator** — shows remaining usage for the current 5-hour session and the 7-day window, color-coded by how much is left
 - **Rich tooltip** — hover to see colored progress bars, exact remaining %, and both relative and absolute reset times
-- **Usage History panel** — a time-series chart in the bottom panel (alongside Terminal/Output) tracking the 5-hour session, general and model-specific 7-day limits, and extra credits. Filter by semantic windows like current session, current week, and today, or by fixed ranges like 1h, 6h, 1d, 7d, and 30d; the selected view persists across reloads. History is stored locally and retained for a configurable number of days.
+- **Usage History panel** — a time-series chart in the bottom panel (alongside Terminal/Output) tracking the 5-hour session, general and model-specific 7-day limits, and extra usage spend (in your billing currency). Filter by semantic windows like current session, current week, and today, or by fixed ranges like 1h, 6h, 1d, 7d, and 30d; the selected view persists across reloads. History is stored locally and retained for a configurable number of days.
 - **History overlays** — optional session-start markers, weekly reset markers, and weekly pace / forecast lines in the Usage History chart; each overlay can be toggled directly in the panel or via settings
 - **Adaptive weekly forecast** — a regularized baseline avoids noisy early-week extrapolation, then recent personal weekly patterns are incorporated with recency weighting. The shared projection appears in the history panel, tooltip, and a separate color-coded status bar dot; right-click the status bar and toggle "Claude Usage Forecast" to show or hide it
 - **Customizable thresholds** — configure when the indicator turns yellow or red
@@ -29,7 +29,7 @@ _Status bar_:
 ⚡ 🟢 S: 82%  │  🟡 W: 38%
 ```
 
-- `S` = session (5-hour rolling window)
+- `S` = session (5-hour rolling window); hidden on plans without a 5-hour limit (e.g. Ultra)
 - `W` = weekly (7-day rolling window)
 - Percentage = **remaining** capacity by default; set `claudeUsage.showUsed` to `true` to flip to **used** %
 - 🟢 plenty of headroom · 🟡 getting low · 🔴 almost out
@@ -37,7 +37,7 @@ _Status bar_:
 
 ### Tooltip
 
-Hovering shows a detailed breakdown with colored usage bars, forecast markers where available, remaining percentage, and reset times — e.g. "2h 15m (Wed, Mar 19, 02:30 AM)".
+Hovering shows a detailed breakdown with colored usage bars, forecast markers where available, remaining percentage, and reset times — e.g. "2h 15m (Wed, Mar 19, 02:30 AM)". It also shows extra usage spend against its monthly limit, how much of the weekly limit a model-specific limit may use, and — when usage comes from more than one surface — the weekly split between Claude Code, Chats, Cowork, and others.
 
 ## Requirements
 

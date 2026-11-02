@@ -2,6 +2,29 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- Extra usage is now shown in your billing currency (e.g. "€0.00 / €20.00") instead of raw minor units labeled as credits ("0 / 2000 credits"). It reads the API's structured `spend` object and falls back to the older `extra_usage` fields.
+
+### Added
+
+- Plans without a 5-hour limit (e.g. Ultra) get a "no 5h limit on this plan" note in the tooltip; the status bar keeps showing only `W:`.
+- The tooltip shows the weekly usage split by surface (Claude Code, Chats, Cowork, …) when more than one surface has usage.
+- Model-specific weekly limits (e.g. Fable) show how much of the overall weekly limit they may use.
+- Unknown or unhandled parts of the usage response (new fields, unknown limit kinds, lock reasons, non-normal severities) are logged at debug level in the "Claude Code Usage" output channel.
+
+### Changed
+
+- Usage History hides series without data in the selected range (e.g. the session line on plans without a 5-hour limit, or extra usage when it was never enabled), and disables the "Session resets" toggle when there is no session data.
+- The Usage History extra usage series is renamed from "Extra credits" to "Extra usage" and plotted in the billing currency.
+
+### Maintenance
+
+- Updated Chart.js (Usage History chart) to 4.6.1.
+- The build now copies Chart.js from `node_modules` instead of using a committed copy, so dependency updates take effect automatically. It also clears `out/` first, so output from deleted sources (e.g. stale tests) no longer lingers.
+
 ## [0.3.3] - 2026-09-18
 
 ### Fixed

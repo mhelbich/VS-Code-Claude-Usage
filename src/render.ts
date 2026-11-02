@@ -1,6 +1,7 @@
 import type { ColorThresholds, UsageResponse } from "./types.js";
 import { describeForecastMethod, FIVE_HOUR_MS, getSessionForecast, getWeeklyForecast, parseIsoTime, type ForecastStatus, type UsageForecast } from "./forecast.js";
-import { getScopedWeeklyLimits } from "./scopedLimits.js";
+import { formatExtraUsage, getExtraUsage } from "./extraUsage.js";
+import { getScopedShares, getScopedWeeklyLimits, scopedIdentity } from "./scopedLimits.js";
 
 type ResetFormatOptions = {
   now?: number;
@@ -131,6 +132,21 @@ export function buildStatusText(usage: UsageResponse, t: ColorThresholds, showUs
   return parts.length ? `$(pulse) ${parts.join(" │ ")}` : "$(pulse) Claude —";
 }
 
+function hasSessionLimit(usage: UsageResponse): boolean {
+  return (usage.limits ?? []).some((limit) => limit.kind === "session");
+}
+
+/** "Weekly usage by surface: Claude Code 99% · Cowork 1%"; empty when fewer than two surfaces have usage, since a single source adds no information. */
+function formatWeeklyBreakdown(usage: UsageResponse): string {
+  const rows = (usage.seven_day_breakdown?.rows ?? []).flatMap((row) => {
+    const name = row.display_name?.trim();
+    const percent = row.percent;
+    return name && typeof percent === "number" && Number.isFinite(percent) && percent > 0 ? [{ name, percent }] : [];
+  });
+  if (rows.length < 2) return "";
+  return `Weekly usage by surface: ${rows.map((row) => `${row.name} ${row.percent.toFixed(0)}%`).join(" · ")}\n\n`;
+}
+
 type UsageBucket = { utilization: number; resets_at?: string | null };
 function formatUsageBucket(
   heading: string,
@@ -156,23 +172,32 @@ export function buildTooltipMarkdown(
   showScopedWeeklyLimits = true,
   providedWeeklyForecast?: UsageForecast | null,
 ): string {
-  const { five_hour: session, seven_day: week, extra_usage: extra } = usage;
+  const { five_hour: session, seven_day: week } = usage;
   const weeklyForecast = providedWeeklyForecast === undefined ? getWeeklyForecast(usage, options?.now) : providedWeeklyForecast;
   const sessionForecast = getSessionForecast(usage, options?.now);
 
   let markdown = "### Claude Code Usage\n\n";
 
-  if (session) markdown += formatUsageBucket("Session (5h)", session, t, showUsed, options, sessionForecast?.confidence === "high" ? sessionForecast : undefined);
-  if (week) markdown += formatUsageBucket("Weekly (7d)", week, t, showUsed, options, weeklyForecast ?? undefined);
+  if (session) {
+    markdown += formatUsageBucket("Session (5h)", session, t, showUsed, options, sessionForecast?.confidence === "high" ? sessionForecast : undefined);
+  } else if (week && !hasSessionLimit(usage)) {
+    // Plans like Ultra drop the 5h limit entirely; say so instead of silently omitting it.
+    markdown += "**Session (5h)** — no 5h limit on this plan\n\n";
+  }
+  if (week) {
+    markdown += formatUsageBucket("Weekly (7d)", week, t, showUsed, options, weeklyForecast ?? undefined);
+    markdown += formatWeeklyBreakdown(usage);
+  }
   if (showScopedWeeklyLimits) {
+    const shares = getScopedShares(usage);
     for (const scoped of getScopedWeeklyLimits(usage)) {
       markdown += formatUsageBucket(`${scoped.display_name} (7d)`, { utilization: scoped.percent, resets_at: scoped.resets_at }, t, showUsed, options);
+      const share = shares.get(scopedIdentity(scoped));
+      if (share !== undefined) markdown += `Counts toward weekly · up to ${share.toFixed(0)}% of weekly limit\n\n`;
     }
   }
 
-  markdown += extra?.is_enabled
-    ? `**Extra usage:** ${extra.used_credits} / ${extra.monthly_limit} credits\n\n`
-    : `**Extra usage:** ✗ not enabled\n\n`;
+  markdown += `**Extra usage:** ${formatExtraUsage(getExtraUsage(usage))}\n\n`;
 
   markdown += "---\n*Click to refresh*";
 

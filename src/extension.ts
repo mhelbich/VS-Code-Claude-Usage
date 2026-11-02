@@ -5,7 +5,8 @@ import { COMMANDS, CONFIG_PATHS, getClaudeUsageSetting } from "./config";
 import { getAccessToken } from "./credentials";
 import { EMPTY_FORECAST_PROFILE, getWeeklyForecast, updateForecastProfile, type ForecastProfile } from "./forecast";
 import { HistoryStore } from "./history";
-import { getScopedWeeklyLimits } from "./scopedLimits";
+import { getExtraUsage } from "./extraUsage";
+import { describeUnhandledFields, getScopedWeeklyLimits } from "./scopedLimits";
 import { Action, BarProps, State, forecastStateToBarProps, reduce, stateToBarProps } from "./statusBar";
 import type { HistoryEntry, UsageResponse } from "./types";
 import { UsageHistoryProvider } from "./webviewProvider";
@@ -31,6 +32,8 @@ function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
 }
 
 function toHistoryEntry(usage: UsageResponse, timestamp: number): HistoryEntry {
+  const extra = getExtraUsage(usage);
+  const enabledExtra = extra?.enabled ? extra : null;
   return {
     timestamp,
     five_hour: usage.five_hour?.utilization ?? null,
@@ -38,8 +41,11 @@ function toHistoryEntry(usage: UsageResponse, timestamp: number): HistoryEntry {
     seven_day: usage.seven_day?.utilization ?? null,
     seven_day_resets_at: usage.seven_day?.resets_at ?? null,
     scoped_weekly: getScopedWeeklyLimits(usage),
-    extra_used: usage.extra_usage?.used_credits ?? null,
-    extra_limit: usage.extra_usage?.monthly_limit ?? null,
+    // Minor units (e.g. cents), consistent with entries recorded from the legacy extra_usage fields.
+    extra_used: enabledExtra?.usedMinor ?? null,
+    extra_limit: enabledExtra?.limitMinor ?? null,
+    extra_currency: enabledExtra?.currency ?? null,
+    extra_exponent: enabledExtra ? enabledExtra.exponent : null,
   };
 }
 
@@ -147,6 +153,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       const usage = await fetchUsage(token);
       writeCache(usage, refreshStartedAt);
       log.info("Usage fetched successfully");
+      for (const note of describeUnhandledFields(usage)) log.debug(`API response: ${note}`);
       const entry = toHistoryEntry(usage, Date.now());
       forecastProfile = updateForecastProfile(forecastProfile, [entry], entry.timestamp, onIncompleteForecastWeek);
       await ctx.globalState.update(forecastProfileKey, forecastProfile);
