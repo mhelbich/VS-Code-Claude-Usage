@@ -69,6 +69,8 @@ Thresholds are expressed as **used %** (e.g. the default `60` means "warn when 6
 
 Use the workspace's `Run Extension` or `Watch Extension` launch profile to debug with `F5`. These launch an Extension Development Host, which provides the `vscode` module to the extension at runtime.
 
+`npm run compile` (and `npm run watch`) first runs `scripts/prepare-build.mjs`, which clears `out/` and copies Chart.js's UMD build from `node_modules/chart.js` into `history-view/chart.umd.js`. That file is generated, not committed: the webview may only load scripts shipped inside the extension, so the version pinned in `package-lock.json` is copied on every build. Run `npm install` before the first build.
+
 ### Testing
 
 This extension uses the official VS Code extension test tooling (`@vscode/test-cli` + `@vscode/test-electron`) with Mocha-based integration tests.

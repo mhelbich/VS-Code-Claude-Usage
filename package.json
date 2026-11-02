@@ -123,9 +123,9 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "node scripts/prepare-build.mjs && tsc -p ./",
     "typecheck": "tsc --noEmit",
-    "watch": "tsc -watch -p ./",
+    "watch": "node scripts/prepare-build.mjs && tsc -watch -p ./",
     "pretest:unit": "npm run compile",
     "test:unit": "node --test out/unit/**/*.test.js",
     "pretest:vscode": "npm run compile",
