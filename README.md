@@ -49,6 +49,8 @@ You must be logged in to Claude Code (`claude /login`). The extension reads your
 - Linux / WSL (reads from `~/.claude/.credentials.json`)
 - Windows (reads from `~/.claude/.credentials.json`)
 
+If you run Claude Code with a custom config directory, the extension follows the same override: `CLAUDE_SECURESTORAGE_CONFIG_DIR` if set, otherwise `CLAUDE_CONFIG_DIR`. On macOS this also selects the matching Keychain entry.
+
 ## Settings
 
 | Setting                               | Default | Description                                                        |
@@ -76,7 +78,8 @@ Use the workspace's `Run Extension` or `Watch Extension` launch profile to debug
 This extension uses the official VS Code extension test tooling (`@vscode/test-cli` + `@vscode/test-electron`) with Mocha-based integration tests.
 
 - Run unit tests with `npm run test:unit`
-- Run extension integration tests with `npm test`
+- Run extension integration tests with `npm run test:vscode`
+- Run both with `npm test`
 - Debug tests with the workspace's `Extension Tests` launch profile
 
 The test runner downloads VS Code into `.vscode-test/` on first run.
@@ -89,7 +92,7 @@ If `npm test` fails because another VS Code Stable instance is running, either c
 
 The extension calls the same usage endpoint that Claude Code itself uses (`https://api.anthropic.com/api/oauth/usage`) with the OAuth token stored locally by `claude`. No data ever leaves your machine beyond that single read-only API call.
 
-**Multiple windows:** When more than one VS Code window is open, each instance would otherwise poll independently, quickly exhausting the API rate limit. To avoid this, all instances share a cache file at `~/.claude/usage-cache.json`. Before making a network request, each instance checks whether the cached response is still within its configured refresh interval. If it is, the cached data is used directly and no API call is made. The instance with the shortest configured interval effectively drives the refresh rate for all windows.
+**Multiple windows:** When more than one VS Code window is open, each instance would otherwise poll independently, quickly exhausting the API rate limit. To avoid this, all instances share a cache file at `~/.claude/usage-cache.json` (or `usage-cache.json` in the custom config directory described above). Before making a network request, each instance checks whether the cached response is still within its configured refresh interval. If it is, the cached data is used directly and no API call is made. The instance with the shortest configured interval effectively drives the refresh rate for all windows.
 
 ## License
 
