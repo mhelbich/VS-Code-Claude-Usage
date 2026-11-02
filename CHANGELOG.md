@@ -2,7 +2,7 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
-## [Unreleased]
+## [0.4.0] - 2026-11-02
 
 ### Fixed
 
