@@ -12,6 +12,7 @@ const FULL_HISTORY_WEIGHT = 1.5;
 const MAX_PROFILE_WEEKS = 8;
 const HISTORY_HALF_LIFE_WEEKS = 2;
 const OBSERVATION_BUCKET_MS = 3_600_000;
+const RESET_ROUNDING_MS = 60_000;
 
 export type ForecastWindow = "session" | "weekly";
 export type ForecastStatus = "safe" | "watch" | "risk" | "unavailable";
@@ -251,6 +252,12 @@ function buildWeekProfile(reset: number, observations: ForecastObservation[]): F
   return { reset, finalUtilization: curve[PROFILE_BIN_COUNT] as number, curve };
 }
 
+// The API's resets_at jitters by a few hundred milliseconds between responses. Rounded to the minute,
+// all samples of one week share a reset, as the history view already assumes for its period breaks.
+function normalizeReset(reset: number): number {
+  return Math.round(reset / RESET_ROUNDING_MS) * RESET_ROUNDING_MS;
+}
+
 export function updateForecastProfile(
   profile: ForecastProfile | undefined,
   entries: HistoryEntry[],
@@ -258,15 +265,17 @@ export function updateForecastProfile(
   onIncompleteWeek?: (reset: number, sampleCount: number) => void,
 ): ForecastProfile {
   const current = profile?.version === 1 ? profile : EMPTY_FORECAST_PROFILE;
-  const knownResets = new Set(current.weeks.map((week) => week.reset));
+  const knownResets = new Set(current.weeks.map((week) => normalizeReset(week.reset)));
   const incoming = entries.flatMap((entry): ForecastObservation[] => {
     const reset = parseIsoTime(entry.seven_day_resets_at);
     return reset !== null && entry.seven_day !== null
-      ? [{ timestamp: entry.timestamp, utilization: entry.seven_day, reset }]
+      ? [{ timestamp: entry.timestamp, utilization: entry.seven_day, reset: normalizeReset(reset) }]
       : [];
   });
+  // Stored observations from before the rounding still carry the raw reset.
+  const stored = (current.observations ?? []).map((observation) => ({ ...observation, reset: normalizeReset(observation.reset) }));
   const deduplicated = new Map<string, ForecastObservation>();
-  for (const observation of [...(current.observations ?? []), ...incoming]) {
+  for (const observation of [...stored, ...incoming]) {
     deduplicated.set(`${observation.timestamp}:${observation.reset}`, observation);
   }
   const compacted = new Map<string, ForecastObservation>();

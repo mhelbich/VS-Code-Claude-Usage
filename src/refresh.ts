@@ -1,10 +1,13 @@
 import { isCacheFresh, type CacheEntry } from "./cache";
 import { getWeeklyForecast, updateForecastProfile, type ForecastProfile, type UsageForecast } from "./forecast";
-import { getScopedWeeklyLimits } from "./scopedLimits";
+import { getExtraUsage } from "./extraUsage";
+import { describeUnhandledFields, getScopedWeeklyLimits } from "./scopedLimits";
 import type { Action } from "./statusBar";
 import type { HistoryEntry, UsageResponse } from "./types";
 
 export function toHistoryEntry(usage: UsageResponse, timestamp: number): HistoryEntry {
+  const extra = getExtraUsage(usage);
+  const enabledExtra = extra?.enabled ? extra : null;
   return {
     timestamp,
     five_hour: usage.five_hour?.utilization ?? null,
@@ -12,8 +15,11 @@ export function toHistoryEntry(usage: UsageResponse, timestamp: number): History
     seven_day: usage.seven_day?.utilization ?? null,
     seven_day_resets_at: usage.seven_day?.resets_at ?? null,
     scoped_weekly: getScopedWeeklyLimits(usage),
-    extra_used: usage.extra_usage?.used_credits ?? null,
-    extra_limit: usage.extra_usage?.monthly_limit ?? null,
+    // Minor units (e.g. cents), consistent with entries recorded from the legacy extra_usage fields.
+    extra_used: enabledExtra?.usedMinor ?? null,
+    extra_limit: enabledExtra?.limitMinor ?? null,
+    extra_currency: enabledExtra?.currency ?? null,
+    extra_exponent: enabledExtra ? enabledExtra.exponent : null,
   };
 }
 
@@ -87,6 +93,7 @@ export async function refreshUsage(deps: RefreshDependencies, force = false): Pr
     }
     deps.writeCache(usage, refreshConfigDir, refreshStartedAt);
     deps.log.info("Usage fetched successfully");
+    for (const note of describeUnhandledFields(usage)) deps.log.debug(`API response: ${note}`);
     const entry = toHistoryEntry(usage, deps.now());
     const profile = updateForecastProfile(deps.getForecastProfile(), [entry], entry.timestamp, deps.onIncompleteForecastWeek);
     // Persist reset metadata alongside utilization so the history view can derive markers and forecasts later.

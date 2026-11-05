@@ -1,5 +1,7 @@
 node_modules/
 out/
+# Copied from node_modules/chart.js by scripts/prepare-build.mjs
+history-view/chart.umd.js
 *.vsix
 .vscode-test/
 .DS_Store

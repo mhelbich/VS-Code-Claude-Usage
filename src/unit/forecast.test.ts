@@ -104,6 +104,38 @@ test("profile observations survive independently of chart history and finalize a
   assert.equal(profile.weeks[0].finalUtilization, 41);
 });
 
+test("samples whose reset jitters by milliseconds are learned as one week", () => {
+  const reset = Date.parse("2026-03-16T00:00:00.000Z");
+  const start = reset - SEVEN_DAY_MS;
+  // The API reports the same reset a few hundred milliseconds apart from response to response.
+  const jitter = (bin: number) => ((bin * 137) % 1_200) - 600;
+  const entries = Array.from({ length: 42 }, (_, bin) => historyEntry(start + bin * FOUR_HOURS_MS, reset + jitter(bin), bin));
+  const dropped: number[] = [];
+
+  const profile = updateForecastProfile(EMPTY_FORECAST_PROFILE, entries, reset + 60_000, (r) => dropped.push(r));
+
+  assert.deepEqual(dropped, []);
+  assert.equal(profile.weeks.length, 1);
+  assert.equal(profile.weeks[0].reset, reset);
+  assert.equal(profile.weeks[0].finalUtilization, 41);
+});
+
+test("observations stored with a jittered reset join the same week", () => {
+  const reset = Date.parse("2026-03-16T00:00:00.000Z");
+  const start = reset - SEVEN_DAY_MS;
+  // A profile saved before resets were rounded keeps each observation's raw reset.
+  const stored = {
+    version: 1 as const,
+    weeks: [],
+    observations: Array.from({ length: 41 }, (_, bin) => ({ timestamp: start + bin * FOUR_HOURS_MS, utilization: bin, reset: reset + (bin % 2 ? 412 : -387) })),
+  };
+
+  const profile = updateForecastProfile(stored, [historyEntry(start + 41 * FOUR_HOURS_MS, reset + 95, 41)], reset + 60_000);
+
+  assert.equal(profile.weeks.length, 1);
+  assert.equal(profile.weeks[0].finalUtilization, 41);
+});
+
 test("incomplete weeks are reported via onIncompleteWeek and their samples are dropped", () => {
   const reset = Date.parse("2026-03-16T00:00:00.000Z");
   const start = reset - SEVEN_DAY_MS;

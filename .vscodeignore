@@ -13,4 +13,7 @@ package-lock.json
 out/test/**
 out/unit/**
 .claude/**
+scripts/**
 .github/**
+history-view/jsconfig.json
+history-view/globals.d.ts

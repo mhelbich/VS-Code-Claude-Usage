@@ -16,7 +16,7 @@ _Status bar_:
 
 - **Status bar indicator** — shows remaining usage for the current 5-hour session and the 7-day window, color-coded by how much is left
 - **Rich tooltip** — hover to see colored progress bars, exact remaining %, and both relative and absolute reset times
-- **Usage History panel** — a time-series chart in the bottom panel (alongside Terminal/Output) tracking the 5-hour session, general and model-specific 7-day limits, and extra credits. Filter by semantic windows like current session, current week, and today, or by fixed ranges like 1h, 6h, 1d, 7d, and 30d; the selected view persists across reloads. History is stored locally and retained for a configurable number of days.
+- **Usage History panel** — a time-series chart in the bottom panel (alongside Terminal/Output) tracking the 5-hour session, general and model-specific 7-day limits, and extra usage spend (in your billing currency). Filter by semantic windows like current session, current week, and today, or by fixed ranges like 1h, 6h, 1d, 7d, and 30d; the selected view persists across reloads. History is stored locally and retained for a configurable number of days.
 - **History overlays** — optional session-start markers, weekly reset markers, and weekly pace / forecast lines in the Usage History chart; each overlay can be toggled directly in the panel or via settings
 - **Adaptive weekly forecast** — a regularized baseline avoids noisy early-week extrapolation, then recent personal weekly patterns are incorporated with recency weighting. The shared projection appears in the history panel, tooltip, and a separate color-coded status bar dot; right-click the status bar and toggle "Claude Usage Forecast" to show or hide it
 - **Customizable thresholds** — configure when the indicator turns yellow or red
@@ -29,7 +29,7 @@ _Status bar_:
 ⚡ 🟢 S: 82%  │  🟡 W: 38%
 ```
 
-- `S` = session (5-hour rolling window)
+- `S` = session (5-hour rolling window); hidden on plans without a 5-hour limit (e.g. Ultra)
 - `W` = weekly (7-day rolling window)
 - Percentage = **remaining** capacity by default; set `claudeUsage.showUsed` to `true` to flip to **used** %
 - 🟢 plenty of headroom · 🟡 getting low · 🔴 almost out
@@ -37,7 +37,7 @@ _Status bar_:
 
 ### Tooltip
 
-Hovering shows a detailed breakdown with colored usage bars, forecast markers where available, remaining percentage, and reset times — e.g. "2h 15m (Wed, Mar 19, 02:30 AM)".
+Hovering shows a detailed breakdown with colored usage bars, forecast markers where available, remaining percentage, and reset times — e.g. "2h 15m (Wed, Mar 19, 02:30 AM)". It also shows extra usage spend against its monthly limit, how much of the weekly limit a model-specific limit may use, and — when usage comes from more than one surface — the weekly split between Claude Code, Chats, Cowork, and others.
 
 ## Requirements
 
@@ -61,7 +61,7 @@ Claude Code launched in a terminal (`claudeCode.useTerminal`) uses the shell's e
 
 In remote windows (WSL, SSH, containers), add the setting to the remote settings (**Preferences: Open Remote Settings (JSON)**). VS Code ignores it in the local user settings there, because it is a machine-scoped setting.
 
-Usage history and the weekly forecast are kept separately for each config dir, so accounts don't mix in the History panel.
+Usage history and the weekly forecast are kept separately for each config dir, so accounts don't mix in the History panel. On macOS, the config dir also selects the matching Keychain entry.
 
 ## Settings
 
@@ -83,12 +83,15 @@ Thresholds are expressed as **used %** (e.g. the default `60` means "warn when 6
 
 Use the workspace's `Run Extension` or `Watch Extension` launch profile to debug with `F5`. These launch an Extension Development Host, which provides the `vscode` module to the extension at runtime.
 
+`npm run compile` (and `npm run watch`) first runs `scripts/prepare-build.mjs`, which clears `out/` and copies Chart.js's UMD build from `node_modules/chart.js` into `history-view/chart.umd.js`. That file is generated, not committed: the webview may only load scripts shipped inside the extension, so the version pinned in `package-lock.json` is copied on every build. Run `npm install` before the first build.
+
 ### Testing
 
 This extension uses the official VS Code extension test tooling (`@vscode/test-cli` + `@vscode/test-electron`) with Mocha-based integration tests.
 
 - Run unit tests with `npm run test:unit`
-- Run extension integration tests with `npm test`
+- Run extension integration tests with `npm run test:vscode`
+- Run both with `npm test`
 - Debug tests with the workspace's `Extension Tests` launch profile
 
 The test runner downloads VS Code into `.vscode-test/` on first run.
@@ -101,7 +104,7 @@ If `npm test` fails because another VS Code Stable instance is running, either c
 
 The extension calls the same usage endpoint that Claude Code itself uses (`https://api.anthropic.com/api/oauth/usage`) with the OAuth token stored locally by `claude`. No data ever leaves your machine beyond that single read-only API call.
 
-**Multiple windows:** When more than one VS Code window is open, each instance would otherwise poll independently, quickly exhausting the API rate limit. To avoid this, all instances share a cache file in the Claude config dir (`~/.claude/usage-cache.json` by default). Before making a network request, each instance checks whether the cached response is still within its configured refresh interval. If it is, the cached data is used directly and no API call is made. The instance with the shortest configured interval effectively drives the refresh rate for all windows.
+**Multiple windows:** When more than one VS Code window is open, each instance would otherwise poll independently, quickly exhausting the API rate limit. To avoid this, all instances share a cache file at `~/.claude/usage-cache.json` (or `usage-cache.json` in the custom config directory described above). Before making a network request, each instance checks whether the cached response is still within its configured refresh interval. If it is, the cached data is used directly and no API call is made. The instance with the shortest configured interval effectively drives the refresh rate for all windows.
 
 ## License
 

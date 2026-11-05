@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { buildStatusText, buildTooltipMarkdown, formatReset, getSessionStart, getWeeklyForecast, makeHtmlBar, makeUsageBar, utilColor } from "../render";
 import { ColorThresholds, UsageResponse } from "../types";
+import { MAX20_SESSION, PRO_EUR_EXTRA, ULTRA_NO_SESSION } from "./usageFixtures";
 
 const thresholds: ColorThresholds = {
   warning: 60,
@@ -266,4 +267,41 @@ test("buildTooltipMarkdown warns when the weekly limit projects to hit before re
   );
 
   assert.match(tooltip, /Forecast: Limit in 71h 46m \(2026-03-20T23:46:01\.165Z\) · Baseline/);
+});
+
+const FIXTURE_NOW = Date.parse("2026-11-02T13:00:00.000Z");
+const fixtureTooltip = (usage: UsageResponse) =>
+  buildTooltipMarkdown(usage, thresholds, { now: FIXTURE_NOW, formatAbsolute: (date) => date.toISOString() });
+
+test("buildTooltipMarkdown formats spend as currency", () => {
+  const eur = (value: number) =>
+    new Intl.NumberFormat(undefined, { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+  assert.ok(fixtureTooltip(PRO_EUR_EXTRA).includes(`**Extra usage:** ${eur(0)} / ${eur(20)}`));
+});
+
+test("buildTooltipMarkdown explains a missing 5h limit and hides S: in the status text", () => {
+  const tooltip = fixtureTooltip(ULTRA_NO_SESSION);
+  assert.match(tooltip, /\*\*Session \(5h\)\*\* — no 5h limit on this plan/);
+  assert.match(tooltip, /\*\*Extra usage:\*\* ✗ not enabled/);
+  assert.equal(buildStatusText(ULTRA_NO_SESSION, thresholds), "$(pulse) 🟢 W: 54%");
+});
+
+test("buildTooltipMarkdown omits the session note when the response has a session limit or no weekly data", () => {
+  assert.doesNotMatch(fixtureTooltip(MAX20_SESSION), /no 5h limit/);
+  assert.doesNotMatch(fixtureTooltip({}), /no 5h limit/);
+  // A session limit listed in limits[] without a five_hour bucket is not "no limit".
+  assert.doesNotMatch(fixtureTooltip({ ...MAX20_SESSION, five_hour: null }), /no 5h limit/);
+});
+
+test("buildTooltipMarkdown shows the weekly breakdown only when two or more surfaces have usage", () => {
+  assert.match(fixtureTooltip(MAX20_SESSION), /Weekly usage by surface: Claude Code 99% · Cowork 1%\n/);
+  assert.doesNotMatch(fixtureTooltip(ULTRA_NO_SESSION), /Weekly usage by surface/);
+  assert.doesNotMatch(fixtureTooltip(PRO_EUR_EXTRA), /Weekly usage by surface/);
+});
+
+test("buildTooltipMarkdown shows the scoped share under the matching model", () => {
+  for (const usage of [MAX20_SESSION, ULTRA_NO_SESSION]) {
+    assert.match(fixtureTooltip(usage), /\*\*Fable \(7d\)\*\*[\s\S]*Counts toward weekly · up to 50% of weekly limit/);
+  }
+  assert.doesNotMatch(buildTooltipMarkdown(ULTRA_NO_SESSION, thresholds, undefined, false, false), /Counts toward weekly/);
 });

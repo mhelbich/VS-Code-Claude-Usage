@@ -1,4 +1,3 @@
-/* global Chart */
 (function () {
   // Resolve VS Code CSS variables into concrete values for Chart.js (canvas ignores CSS vars)
   const cs = getComputedStyle(document.documentElement);
@@ -53,7 +52,7 @@
   const BASE_DATASETS = [
     { key: 'five_hour',      resetKey: 'five_hour_resets_at', label: 'Session 5h',    yAxisID: 'yPct',     borderColor: '#4EC9B0', backgroundColor: '#4EC9B022' },
     { key: 'seven_day',      resetKey: 'seven_day_resets_at', label: 'Weekly 7d',     yAxisID: 'yPct',     borderColor: '#569CD6', backgroundColor: '#569CD622' },
-    { key: 'extra_used',     resetKey: null,                  label: 'Extra credits', yAxisID: 'yCredits', borderColor: '#CE9178', backgroundColor: '#CE917822' },
+    { key: 'extra_used',     resetKey: null,                  label: 'Extra usage',   yAxisID: 'yCredits', borderColor: '#CE9178', backgroundColor: '#CE917822' },
   ];
   const SCOPED_COLORS = ['#C586C0', '#DCDCAA', '#9CDCFE', '#D16969', '#B5CEA8', '#CE9178'];
 
@@ -202,7 +201,7 @@
             title: (items) => items.length ? formatTs(items[0].parsed.x) : '',
             label: (item) => {
               if (item.dataset.yAxisID === 'yCredits') {
-                return `${item.dataset.label}: ${item.parsed.y}`;
+                return `${item.dataset.label}: ${formatMoney(item.parsed.y, getExtraUnit(allEntries))}`;
               }
               return `${item.dataset.label}: ${item.parsed.y.toFixed(1)}% ${showUsed ? 'used' : 'remaining'}`;
             },
@@ -259,6 +258,38 @@
     });
   }
 
+  // Extra usage is stored in minor units (e.g. cents). Older entries carry no currency metadata;
+  // they were recorded from the same API values, so the latest known unit applies to them too.
+  function getExtraUnit(entries) {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const e = entries[i];
+      if (typeof e.extra_exponent === 'number') {
+        return { currency: e.extra_currency || null, exponent: e.extra_exponent };
+      }
+    }
+    return { currency: null, exponent: 0 };
+  }
+
+  function toMajorUnits(minor, unit) {
+    return minor / 10 ** unit.exponent;
+  }
+
+  function formatMoney(value, unit) {
+    if (unit.currency) {
+      try {
+        return new Intl.NumberFormat(undefined, {
+          style: 'currency',
+          currency: unit.currency,
+          minimumFractionDigits: unit.exponent,
+          maximumFractionDigits: unit.exponent,
+        }).format(value);
+      } catch {
+        // Unknown currency code: fall through to the plain number.
+      }
+    }
+    return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: unit.exponent }).format(value)} credits`;
+  }
+
   function clampPct(value) {
     return Math.max(0, Math.min(100, value));
   }
@@ -272,7 +303,10 @@
     const seen = new Set();
     const values = [];
     for (const entry of entries) {
-      const marker = selector(entry);
+      const raw = selector(entry);
+      // Round to the minute: the API's reset times jitter by fractions of a second between responses,
+      // which would otherwise draw one marker per sample at practically the same spot.
+      const marker = raw === null ? null : Math.round(raw / 60_000) * 60_000;
       if (marker === null || seen.has(marker)) continue;
       seen.add(marker);
       values.push(marker);
@@ -332,7 +366,7 @@
     return points;
   }
 
-  function buildBaseDatasets(entries) {
+  function buildBaseDatasets(entries, extraUnit) {
     return BASE_DATASETS.map(d => {
       const data = [];
       let prevNonNullReset = null;
@@ -362,8 +396,10 @@
         let y;
         if (d.yAxisID === 'yPct' && v !== null) {
           y = showUsed ? v : 100 - v;
+        } else if (d.yAxisID === 'yCredits' && v !== null && v !== undefined) {
+          y = toMajorUnits(v, extraUnit);
         } else {
-          y = v;
+          y = v ?? null;
         }
         data.push({ x: e.timestamp, y });
       }
@@ -380,9 +416,13 @@
         spanGaps: false,
         order: 10,
       };
-    });
+    })
+      // Drop series without data in the viewport (e.g. no 5h limit on Ultra, extra usage never enabled)
+      // so the legend only lists what the chart actually shows.
+      .filter(dataset => dataset.data.some(point => point.y !== null));
   }
 
+  // Must match scopedIdentity in src/scopedLimits.ts.
   function scopedIdentity(scoped) {
     return scoped.model_id ? `id:${scoped.model_id}` : `name:${scoped.display_name}`;
   }
@@ -597,18 +637,30 @@
 
     chart.options.scales.yPct.title.text = showUsed ? '% used' : '% remaining';
 
-    const latestLimit = [...allEntries].reverse().find(e => e.extra_limit !== null)?.extra_limit;
-    if (latestLimit != null) chart.options.scales.yCredits.max = latestLimit;
+    const extraUnit = getExtraUnit(allEntries);
+    const latestLimit = [...allEntries].reverse().find(e => e.extra_limit != null)?.extra_limit;
+    chart.options.scales.yCredits.max = latestLimit != null ? toMajorUnits(latestLimit, extraUnit) : undefined;
+    chart.options.scales.yCredits.title.text = extraUnit.currency ?? 'credits';
+
+    const baseDatasets = buildBaseDatasets(filtered, extraUnit);
+    chart.options.scales.yCredits.display = baseDatasets.some(dataset => dataset.yAxisID === 'yCredits');
+
+    const hasSessionData = filtered.some(e => e.five_hour !== null && e.five_hour !== undefined);
+    const sessionToggle = document.querySelector('#overlay-controls input[data-toggle="showSessionResetMarkers"]');
+    if (sessionToggle) {
+      sessionToggle.disabled = !hasSessionData;
+      sessionToggle.parentElement.title = hasSessionData ? '' : 'No 5h session limit in this range.';
+    }
 
     const showWeeklyForecast = getEffectiveSetting('showWeeklyForecast');
     chart.data.labels = [];
     chart.data.datasets = [
-      ...buildBaseDatasets(filtered),
+      ...baseDatasets,
       ...(overlayDefaults.showScopedWeeklyLimits ? buildScopedDatasets(filtered) : []),
       ...buildForecastDatasets(showWeeklyForecast ? weeklyForecast : null),
     ];
     chart.options.plugins.historyOverlays = {
-      showSessionResetMarkers: getEffectiveSetting('showSessionResetMarkers'),
+      showSessionResetMarkers: hasSessionData && getEffectiveSetting('showSessionResetMarkers'),
       showWeeklyResetMarkers: getEffectiveSetting('showWeeklyResetMarkers'),
       showWeeklyForecast,
       sessionStarts: getDistinctMarkers(allEntries, entry => {
