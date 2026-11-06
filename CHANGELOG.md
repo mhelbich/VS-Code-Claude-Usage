@@ -7,8 +7,8 @@ All notable changes to the **Claude Code Usage Status** extension will be docume
 ### Added
 
 - The extension follows the Claude Code extension's `claudeCode.environmentVariables` setting for `CLAUDE_CONFIG_DIR`, the way Claude Code launched from the same window does: only absolute paths apply, and `claudeCode.claudeProcessWrapper` is respected. VS Code profiles that point Claude at different config dirs now each show their own account's usage, and switching the setting takes effect without a reload (thanks @jsilvermist).
-- Usage history and the weekly forecast are kept per config dir, since VS Code shares the extension's global storage across profiles. The default `~/.claude` keeps its existing history, including when `CLAUDE_CONFIG_DIR` points at it explicitly. Setups that already set `CLAUDE_CONFIG_DIR` in VS Code's own environment start a new history, because the shared file can't be split by account.
-- `claudeUsage.accounts` shows several Claude accounts side by side, for example a team and a personal subscription: each listed config dir gets its own labeled status bar items, tooltip, history and forecast, and the account Claude Code uses in the window is marked with the pulse icon.
+- Usage history and the weekly forecast are kept per config dir, since VS Code shares the extension's global storage across profiles. The default `~/.claude` keeps its existing history, including when `CLAUDE_CONFIG_DIR` points at it explicitly. Setups that already set `CLAUDE_CONFIG_DIR` in VS Code's own environment start a new history, because the shared file can't be split by account. On Windows, different spellings of the same dir (casing, `/` or `\`) share one history.
+- `claudeUsage.accounts` shows several Claude accounts side by side, for example a team and a personal subscription: each listed config dir gets its own labeled status bar items, tooltip, history and forecast, and the account the Claude Code panel in the window uses is marked with the pulse icon. The setting is machine-scoped, so it can be set in user or remote settings but not in a workspace's settings.
 - With more than one account listed, the Usage History panel has a dropdown to switch between accounts.
 
 ### Changed
@@ -22,6 +22,8 @@ All notable changes to the **Claude Code Usage Status** extension will be docume
 ### Maintenance
 
 - `npm run package` passes `--no-dependencies` to `vsce`, which failed on Windows in its dependency scan. The extension has no runtime dependencies.
+- The README is restructured, with new screenshots and sections on multiple accounts, the Usage History panel and hiding status bar items.
+- Bumped `@vscode/vsce` to 4.1.0; updated transitive deps (`@azure/msal-node`, `qs`).
 
 ## [0.4.0] - 2026-11-02
 
