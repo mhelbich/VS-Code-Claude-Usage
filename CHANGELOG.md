@@ -2,6 +2,21 @@
 
 All notable changes to the **Claude Code Usage Status** extension will be documented here.
 
+## [0.5.0] - 2026-11-06
+
+### Added
+
+- The extension follows the Claude Code extension's `claudeCode.environmentVariables` setting for `CLAUDE_CONFIG_DIR`, the way Claude Code launched from the same window does: only absolute paths apply, and `claudeCode.claudeProcessWrapper` is respected. VS Code profiles that point Claude at different config dirs now each show their own account's usage, and switching the setting takes effect without a reload (thanks @jsilvermist).
+- Usage history and the weekly forecast are kept per config dir, since VS Code shares the extension's global storage across profiles. The default `~/.claude` keeps its existing history, including when `CLAUDE_CONFIG_DIR` points at it explicitly. Setups that already set `CLAUDE_CONFIG_DIR` in VS Code's own environment start a new history, because the shared file can't be split by account.
+
+### Fixed
+
+- An empty `CLAUDE_CONFIG_DIR` now means the default config dir, instead of a cache path relative to the extension host's working directory.
+
+### Maintenance
+
+- `npm run package` passes `--no-dependencies` to `vsce`, which failed on Windows in its dependency scan. The extension has no runtime dependencies.
+
 ## [0.4.0] - 2026-11-02
 
 ### Fixed
