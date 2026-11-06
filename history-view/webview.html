@@ -11,6 +11,11 @@
 </head>
 
 <body>
+  <!-- Outside #controls, which is hidden while the selected account has no history: switching must stay possible. -->
+  <div id="account-controls" class="control-group" hidden>
+    <label class="control-label" for="account-select">Account</label>
+    <select id="account-select"></select>
+  </div>
   <div id="controls">
     <div id="range-controls">
       <div class="control-group">
@@ -45,6 +50,8 @@
     window.__INITIAL_SETTINGS__ = {{INITIAL_SETTINGS}};
     window.__INITIAL_FORECAST__ = {{INITIAL_FORECAST}};
     window.__INITIAL_ACTIVE_VIEW__ = {{INITIAL_ACTIVE_VIEW}};
+    window.__INITIAL_ACCOUNTS__ = {{INITIAL_ACCOUNTS}};
+    window.__INITIAL_SELECTED_ACCOUNT__ = {{INITIAL_SELECTED_ACCOUNT}};
   </script>
   <script nonce="{{NONCE}}" src="{{CHART_URI}}"></script>
   <script nonce="{{NONCE}}" src="{{JS_URI}}"></script>
