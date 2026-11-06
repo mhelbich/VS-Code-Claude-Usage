@@ -11,6 +11,13 @@ export interface HistoryViewSettings {
   showScopedWeeklyLimits: boolean;
 }
 
+/** An account the history panel can show, for its account dropdown. */
+export interface HistoryAccountOption {
+  key: string;
+  label: string;
+  active: boolean;
+}
+
 export class UsageHistoryProvider implements vscode.WebviewViewProvider {
   static readonly viewId = "claudeUsage.historyView";
   private static readonly ACTIVE_VIEW_KEY = "historyActiveView";
@@ -19,6 +26,8 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
   private _view: vscode.WebviewView | undefined;
   private _showUsed = false;
   private _forecast: UsageForecast | null = null;
+  private _accounts: HistoryAccountOption[] = [];
+  private _selectedAccount: string | undefined;
   private _settings: HistoryViewSettings = {
     showSessionResetMarkers: true,
     showWeeklyResetMarkers: true,
@@ -28,18 +37,52 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly extensionUri: vscode.Uri,
-    private readonly store: HistoryStore,
+    /** The history store of the account the panel shows; changes when another account is selected. */
+    private readonly getStore: () => HistoryStore,
     private readonly globalState: vscode.Memento,
+    private readonly onSelectAccount: (key: string) => void,
   ) {}
+
+  /**
+   * Sets the accounts offered in the panel's dropdown (shown with two or more) and the one shown.
+   * Takes effect with the next refresh(), which sends that account's entries.
+   */
+  setAccounts(accounts: HistoryAccountOption[], selected: string | undefined): void {
+    this._accounts = accounts;
+    this._selectedAccount = selected;
+    this._updateDescription();
+  }
+
+  private _updateDescription(): void {
+    if (this._view) {
+      this._view.description = this._accounts.find((account) => account.key === this._selectedAccount)?.label || undefined;
+    }
+  }
+
+  private _payload(entries: HistoryEntry[]) {
+    return {
+      type: "data",
+      entries,
+      showUsed: this._showUsed,
+      settings: this._settings,
+      forecast: this._forecast,
+      accounts: this._accounts,
+      selectedAccount: this._selectedAccount,
+    };
+  }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this._view = view;
     view.webview.options = { enableScripts: true, localResourceRoots: [this.extensionUri] };
-    view.webview.html = this._buildHtml(view.webview, this.store.read(), this._showUsed, this._settings, this._forecast);
+    view.webview.html = this._buildHtml(view.webview, this.getStore().read(), this._showUsed, this._settings, this._forecast);
+    this._updateDescription();
     view.webview.onDidReceiveMessage((msg) => {
       if (msg?.type === "ready") {
         // Re-send the current payload after the webview scripts are live to avoid dropped early messages.
-        view.webview.postMessage({ type: "data", entries: this.store.read(), showUsed: this._showUsed, settings: this._settings, forecast: this._forecast });
+        view.webview.postMessage(this._payload(this.getStore().read()));
+      }
+      if (msg?.type === "selectAccount" && this._accounts.some((account) => account.key === msg.key)) {
+        this.onSelectAccount(msg.key);
       }
       if (msg?.type === "activeView" && typeof msg.value === "string") {
         this.globalState.update(UsageHistoryProvider.ACTIVE_VIEW_KEY, msg.value);
@@ -52,7 +95,7 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
     this._settings = settings;
     this._forecast = forecast;
     if (this._view?.visible) {
-      this._view.webview.postMessage({ type: "data", entries, showUsed, settings, forecast });
+      this._view.webview.postMessage(this._payload(entries));
     }
   }
 
@@ -73,7 +116,9 @@ export class UsageHistoryProvider implements vscode.WebviewViewProvider {
       .replaceAll("{{INITIAL_SHOW_USED}}", JSON.stringify(showUsed))
       .replaceAll("{{INITIAL_SETTINGS}}", JSON.stringify(settings))
       .replaceAll("{{INITIAL_FORECAST}}", JSON.stringify(forecast))
-      .replaceAll("{{INITIAL_ACTIVE_VIEW}}", JSON.stringify(activeView));
+      .replaceAll("{{INITIAL_ACTIVE_VIEW}}", JSON.stringify(activeView))
+      .replaceAll("{{INITIAL_ACCOUNTS}}", JSON.stringify(this._accounts).replaceAll("<", "\\u003c"))
+      .replaceAll("{{INITIAL_SELECTED_ACCOUNT}}", JSON.stringify(this._selectedAccount ?? null).replaceAll("<", "\\u003c"));
   }
 }
 

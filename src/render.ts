@@ -115,7 +115,23 @@ function formatForecastSummary(forecast: UsageForecast, showUsed: boolean, optio
     : `Forecast: ${clampPct(forecast.projectedRemainingAtReset).toFixed(1)}% remaining at reset · ${method}`;
 }
 
-export function buildStatusText(usage: UsageResponse, t: ColorThresholds, showUsed = false, now = Date.now()): string {
+/** How a status bar item names its account: the pulse icon (on by default) and, with several accounts, a label. */
+export interface AccountDisplay {
+  label?: string;
+  icon?: boolean;
+}
+
+/** "$(pulse) Claude", "$(pulse) Team" or "Team": the lead of every status bar text. */
+export function statusLead(display: AccountDisplay = {}): string {
+  return [display.icon === false ? null : "$(pulse)", display.label ?? "Claude"].filter(Boolean).join(" ");
+}
+
+/** "Wed, Mar 19, 02:30 PM": when cached usage was fetched. */
+export function formatAsOf(ms: number, formatAbsolute: (date: Date) => string = defaultAbsoluteFormatter): string {
+  return formatAbsolute(new Date(ms));
+}
+
+export function buildStatusText(usage: UsageResponse, t: ColorThresholds, showUsed = false, now = Date.now(), display: AccountDisplay = {}): string {
   const session = usage.five_hour;
   const week = usage.seven_day;
 
@@ -129,7 +145,12 @@ export function buildStatusText(usage: UsageResponse, t: ColorThresholds, showUs
     parts.push(`${utilColor(week.utilization, t)} W: ${value.toFixed(0)}%`);
   }
 
-  return parts.length ? `$(pulse) ${parts.join(" │ ")}` : "$(pulse) Claude —";
+  if (!parts.length) {
+    return `${statusLead(display)} —`;
+  }
+  // Without a label the usage itself identifies the item, as before multi-account support.
+  const lead = display.label ? statusLead(display) : display.icon === false ? "" : "$(pulse)";
+  return [lead, parts.join(" │ ")].filter(Boolean).join(" ");
 }
 
 function hasSessionLimit(usage: UsageResponse): boolean {
@@ -171,12 +192,15 @@ export function buildTooltipMarkdown(
   showUsed = false,
   showScopedWeeklyLimits = true,
   providedWeeklyForecast?: UsageForecast | null,
+  extra: { accountLabel?: string; forecasts?: boolean } = {},
 ): string {
   const { five_hour: session, seven_day: week } = usage;
-  const weeklyForecast = providedWeeklyForecast === undefined ? getWeeklyForecast(usage, options?.now) : providedWeeklyForecast;
-  const sessionForecast = getSessionForecast(usage, options?.now);
+  // Forecasts extrapolate from the time of the data; for last-known (cached) usage they would mislead.
+  const forecasts = extra.forecasts !== false;
+  const weeklyForecast = !forecasts ? null : providedWeeklyForecast === undefined ? getWeeklyForecast(usage, options?.now) : providedWeeklyForecast;
+  const sessionForecast = forecasts ? getSessionForecast(usage, options?.now) : null;
 
-  let markdown = "### Claude Code Usage\n\n";
+  let markdown = `### Claude Code Usage${extra.accountLabel ? ` · ${extra.accountLabel}` : ""}\n\n`;
 
   if (session) {
     markdown += formatUsageBucket("Session (5h)", session, t, showUsed, options, sessionForecast?.confidence === "high" ? sessionForecast : undefined);

@@ -51,6 +51,23 @@ body {
   align-items: center;
 }
 
+#account-controls {
+  margin-bottom: 8px;
+}
+
+#account-controls[hidden] {
+  display: none;
+}
+
+#account-select {
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+  border-radius: 2px;
+  padding: 2px 4px;
+  font-size: 11px;
+}
+
 .control-label {
   font-size: 11px;
   opacity: 0.7;

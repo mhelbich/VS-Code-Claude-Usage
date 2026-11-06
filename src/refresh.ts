@@ -1,5 +1,5 @@
 import { isCacheFresh, type CacheEntry } from "./cache";
-import { getWeeklyForecast, updateForecastProfile, type ForecastProfile, type UsageForecast } from "./forecast";
+import { getWeeklyForecast, parseIsoTime, updateForecastProfile, type ForecastProfile, type UsageForecast } from "./forecast";
 import { getExtraUsage } from "./extraUsage";
 import { describeUnhandledFields, getScopedWeeklyLimits } from "./scopedLimits";
 import type { Action } from "./statusBar";
@@ -44,11 +44,18 @@ export interface RefreshDependencies {
   appendHistory: (entry: HistoryEntry) => void;
   /** Shows a successful refresh in the history view and the status bar. */
   showUsage: (usage: UsageResponse, forecast: UsageForecast | null) => void;
+  /** Shows cached usage of an account without a valid token, marked as last known. */
+  showLastKnown: (cached: CacheEntry) => void;
   dispatch: (action: Action) => void;
   getRefreshIntervalSeconds: () => number;
   onIncompleteForecastWeek: (reset: number, sampleCount: number) => void;
   log: RefreshLog;
   now: () => number;
+}
+
+function isBeforeWeeklyReset(cached: CacheEntry, now: number): boolean {
+  const weeklyReset = parseIsoTime(cached.data.seven_day?.resets_at);
+  return weeklyReset !== null && now < weeklyReset;
 }
 
 export async function refreshUsage(deps: RefreshDependencies, force = false): Promise<void> {
@@ -82,6 +89,13 @@ export async function refreshUsage(deps: RefreshDependencies, force = false): Pr
   deps.log.debug(force ? "Forced refresh — fetching from API" : "Cache missing or stale — fetching from API");
   const token = deps.getAccessToken(refreshConfigDir);
   if (!token) {
+    // Claude Code only renews a token while it runs, so an idle account's token expires. Until the
+    // weekly reset its last known usage is still mostly accurate; after it, it would be made up.
+    if (cached && isBeforeWeeklyReset(cached, refreshStartedAt)) {
+      deps.log.debug("No valid access token — showing the last known usage from the cache");
+      deps.showLastKnown(cached);
+      return;
+    }
     deps.log.warn("No valid access token found — run `claude /login` to sign in");
     deps.dispatch({ type: "no-token" });
     return;

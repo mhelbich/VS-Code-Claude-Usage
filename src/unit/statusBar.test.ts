@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { forecastStateToBarProps, reduce, stateToBarProps, State } from "../statusBar";
+import { forecastStateToBarProps, reduce, stateToBarProps, State, withElapsedResets } from "../statusBar";
 import { buildStatusText, buildTooltipMarkdown } from "../render";
 import { ColorThresholds, UsageResponse } from "../types";
 
@@ -196,4 +196,76 @@ test("forecastStateToBarProps: renders risk weekly forecast chip", () => {
   assert.match(props.tooltipText, /Limit: \*\*/);
   assert.match(props.tooltipText, /Projected at reset: \*\*100\.0% used\*\*/);
   assert.match(props.tooltipText, /Reset: \*\*120h 0m/);
+});
+
+// ─── Last-known (stale) usage ────────────────────────────────────────────────
+
+const STALE_NOW = Date.parse("2026-10-12T10:00:00Z");
+const staleUsage: UsageResponse = {
+  five_hour: { utilization: 40, resets_at: "2026-10-12T09:00:00Z" },
+  seven_day: { utilization: 62, resets_at: "2026-10-16T02:00:00Z" },
+  limits: [
+    { kind: "session", percent: 40, resets_at: "2026-10-12T09:00:00Z" },
+    { kind: "weekly_scoped", percent: 30, resets_at: "2026-10-16T02:00:00Z", scope: { model: { id: "m", display_name: "Model" } } },
+  ],
+};
+
+test("withElapsedResets zeroes limits whose reset has passed and keeps the rest", () => {
+  const result = withElapsedResets(staleUsage, STALE_NOW);
+
+  assert.deepEqual(result.five_hour, { utilization: 0, resets_at: null });
+  assert.deepEqual(result.seven_day, staleUsage.seven_day);
+  assert.deepEqual(result.limits?.[0], { kind: "session", percent: 0, resets_at: null });
+  assert.deepEqual(result.limits?.[1], staleUsage.limits?.[1]);
+});
+
+test("withElapsedResets leaves absent buckets absent", () => {
+  const result = withElapsedResets({ seven_day: { utilization: 10, resets_at: null } }, STALE_NOW);
+
+  assert.equal("five_hour" in result, false);
+  assert.equal("limits" in result, false);
+});
+
+test("reduce: last-known returns the stale state and survives refresh-started and threshold changes", () => {
+  const stale = reduce({ kind: "loading" }, { type: "last-known", usage, fetchedAt: 1, thresholds });
+  assert.deepEqual(stale, { kind: "stale", usage, fetchedAt: 1, thresholds });
+
+  assert.deepEqual(reduce(stale, { type: "refresh-started" }), stale);
+  const newThresholds = { warning: 50, danger: 80 };
+  assert.deepEqual(reduce(stale, { type: "thresholds-changed", thresholds: newThresholds }), { ...stale, thresholds: newThresholds });
+});
+
+test("stateToBarProps: stale shows the usage with elapsed resets applied, greyed out", () => {
+  const props = stateToBarProps({ kind: "stale", usage: staleUsage, fetchedAt: STALE_NOW - 3_600_000, thresholds }, false, true, {}, STALE_NOW);
+
+  assert.equal(props.text, "$(pulse) 🟢 S: 100% │ 🟡 W: 38%");
+  assert.equal(props.color, "disabledForeground");
+  assert.equal(props.backgroundColor, undefined);
+  assert.match(props.tooltipText, /^\*Last known usage, as of .+\. No valid token/);
+  assert.doesNotMatch(props.tooltipText, /Forecast/);
+});
+
+test("forecastStateToBarProps: stale hides the forecast dot", () => {
+  const props = forecastStateToBarProps({ kind: "stale", usage, fetchedAt: 1, thresholds });
+
+  assert.equal(props.visible, false);
+});
+
+// ─── Account labels ──────────────────────────────────────────────────────────
+
+test("stateToBarProps: a labeled account shows its label, with the pulse icon only when active", () => {
+  const ok: State = { kind: "ok", usage, thresholds };
+
+  assert.equal(stateToBarProps(ok, false, true, { label: "Team", icon: true }).text, "$(pulse) Team 🟢 S: 82% │ 🟡 W: 38%");
+  assert.equal(stateToBarProps(ok, false, true, { label: "Personal", icon: false }).text, "Personal 🟢 S: 82% │ 🟡 W: 38%");
+  assert.match(stateToBarProps(ok, false, true, { label: "Team", icon: true }).tooltipText, /^### Claude Code Usage · Team/);
+});
+
+test("stateToBarProps: a labeled account names itself in its other states", () => {
+  const display = { label: "Personal", icon: false };
+
+  assert.equal(stateToBarProps({ kind: "loading" }, false, true, display).text, "Personal …");
+  assert.equal(stateToBarProps({ kind: "no-token" }, false, true, display).text, "Personal ✗");
+  assert.match(stateToBarProps({ kind: "no-token" }, false, true, display).tooltipText, /^Claude Code \(Personal\): not logged in/);
+  assert.equal(stateToBarProps({ kind: "error" }, false, true, display).text, "Personal !");
 });

@@ -38,6 +38,9 @@
   };
   let overlayOverrides = {};
   let activeView = persistedState.activeView || window.__INITIAL_ACTIVE_VIEW__ || 'current-session';
+  // The extension owns the account selection and only ever sends the selected account's entries.
+  let accounts = window.__INITIAL_ACCOUNTS__ || [];
+  let selectedAccount = window.__INITIAL_SELECTED_ACCOUNT__ ?? null;
   const FIVE_HOUR_MS = 5 * 3_600_000;
   const SEVEN_DAY_MS = 7 * 86_400_000;
   const FORECAST_SAMPLE_STEPS = 24;
@@ -702,6 +705,26 @@
     summaryEl.classList.toggle('warning', summary.warning);
   }
 
+  const accountControls = document.getElementById('account-controls');
+  const accountSelect = document.getElementById('account-select');
+
+  function renderAccounts() {
+    // A single account needs no picker.
+    accountControls.hidden = accounts.length < 2;
+    accountSelect.replaceChildren(...accounts.map(account => {
+      const option = document.createElement('option');
+      option.value = account.key;
+      option.textContent = account.active ? `${account.label} (active)` : account.label;
+      return option;
+    }));
+    if (selectedAccount !== null) accountSelect.value = selectedAccount;
+  }
+
+  accountSelect.addEventListener('change', () => {
+    selectedAccount = accountSelect.value;
+    vscode.postMessage({ type: 'selectAccount', key: selectedAccount });
+  });
+
   document.getElementById('range-controls').addEventListener('click', e => {
     const btn = e.target.closest('button[data-view]');
     if (!btn) return;
@@ -725,11 +748,15 @@
       showUsed   = e.data.showUsed ?? showUsed;
       overlayDefaults = e.data.settings ?? overlayDefaults;
       weeklyForecast = e.data.forecast ?? null;
+      accounts = e.data.accounts ?? accounts;
+      selectedAccount = e.data.selectedAccount ?? selectedAccount;
+      renderAccounts();
       setToggleState();
       render();
     }
   });
 
+  renderAccounts();
   setToggleState();
   render();
 
