@@ -48,16 +48,38 @@ test("withConfigDirSuffix uses the same hash as the config-dir-suffixed keychain
 });
 
 test("withAccountSuffix keeps the bare name for the default config dir", () => {
-  assert.equal(withAccountSuffix("usage-history", undefined, "/home/test"), "usage-history");
+  assert.equal(withAccountSuffix("usage-history", undefined, "/home/test", "linux"), "usage-history");
 });
 
 test("withAccountSuffix keeps the bare name when the config dir points at ~/.claude explicitly", () => {
-  assert.equal(withAccountSuffix("usage-history", "/home/test/.claude", "/home/test"), "usage-history");
-  assert.equal(withAccountSuffix("usage-history", "/home/test/.claude/", "/home/test"), "usage-history");
+  assert.equal(withAccountSuffix("usage-history", "/home/test/.claude", "/home/test", "linux"), "usage-history");
+  assert.equal(withAccountSuffix("usage-history", "/home/test/.claude/", "/home/test", "linux"), "usage-history");
 });
 
 test("withAccountSuffix uses the config dir hash for any other dir", () => {
-  assert.equal(withAccountSuffix("usage-history", "/custom/claude", "/home/test"), "usage-history-7427f042");
+  // Pinned: the hash names existing history files, so changing it would orphan users' history.
+  assert.equal(withAccountSuffix("usage-history", "/custom/claude", "/home/test", "linux"), "usage-history-7427f042");
+  assert.equal(withAccountSuffix("usage-history", "/custom/claude/", "/home/test", "linux"), "usage-history-7427f042");
+});
+
+test("withAccountSuffix compares POSIX paths case-sensitively", () => {
+  assert.notEqual(withAccountSuffix("usage-history", "/Custom/Claude", "/home/test", "linux"), "usage-history-7427f042");
+  assert.notEqual(withAccountSuffix("usage-history", "/home/test/.Claude", "/home/test", "linux"), "usage-history");
+});
+
+test("withAccountSuffix on Windows keeps the bare name for ~/.claude in any casing or separator", () => {
+  const home = "C:\\Users\\Me";
+  assert.equal(withAccountSuffix("usage-history", "c:\\users\\me\\.claude", home, "win32"), "usage-history");
+  assert.equal(withAccountSuffix("usage-history", "C:/Users/Me/.CLAUDE/", home, "win32"), "usage-history");
+});
+
+test("withAccountSuffix on Windows gives every spelling of a dir the same suffix", () => {
+  const home = "C:\\Users\\Me";
+  const expected = withAccountSuffix("usage-history", "C:\\Users\\Me\\.claude-work", home, "win32");
+  assert.match(expected, /^usage-history-[0-9a-f]{8}$/);
+  assert.equal(withAccountSuffix("usage-history", "C:/Users/Me/.claude-work", home, "win32"), expected);
+  assert.equal(withAccountSuffix("usage-history", "c:\\users\\me\\.claude-work\\", home, "win32"), expected);
+  assert.notEqual(withAccountSuffix("usage-history", "C:\\Users\\Me\\.claude-other", home, "win32"), expected);
 });
 
 // ─── claudeCode.environmentVariables (mirrors Claude Code 2.1.296) ─────────────

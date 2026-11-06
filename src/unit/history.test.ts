@@ -40,7 +40,8 @@ test("getHistoryFileName keeps the original file for the default config dir", ()
 });
 
 test("getHistoryFileName gives each config dir its own file", () => {
-  assert.equal(getHistoryFileName("/custom/claude"), "usage-history-7427f042.json");
+  // The exact hash depends on the platform's path rules; it's pinned in configDir.test.ts.
+  assert.match(getHistoryFileName("/custom/claude"), /^usage-history-[0-9a-f]{8}\.json$/);
   assert.notEqual(getHistoryFileName("/home/test/.claude-work"), getHistoryFileName("/custom/claude"));
 });
 

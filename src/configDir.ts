@@ -15,17 +15,38 @@ export function withConfigDirSuffix(name: string, configDir: string | undefined)
   return `${name}-${suffix}`;
 }
 
+// Canonical form of a dir for comparing and hashing: resolved (separators and trailing slashes
+// normalized), and lowercased on Windows, where paths are case-insensitive.
+function canonicalDir(segments: string[], platform: NodeJS.Platform): string {
+  if (platform === "win32") {
+    return path.win32.resolve(...segments).toLowerCase();
+  }
+  return path.posix.resolve(...segments);
+}
+
 /**
  * Names this extension's per-account storage (usage history, forecast profile) after the config dir.
- * Unlike the Keychain names, a config dir that resolves to the default ~/.claude keeps the bare name,
- * so setting CLAUDE_CONFIG_DIR to the default dir explicitly doesn't start a new history.
+ * Unlike the Keychain names, which must match what Claude Code writes, the hash is taken over the
+ * canonical path, so spellings of the same dir (e.g. `C:/x` and `c:\x\` on Windows) share one history.
+ * A config dir that resolves to the default ~/.claude keeps the bare name, so setting CLAUDE_CONFIG_DIR
+ * to the default dir explicitly doesn't start a new history.
  */
-export function withAccountSuffix(name: string, configDir: string | undefined, homedir = os.homedir()): string {
-  if (!configDir || path.resolve(configDir) === path.resolve(homedir, ".claude")) {
+export function withAccountSuffix(
+  name: string,
+  configDir: string | undefined,
+  homedir = os.homedir(),
+  platform: NodeJS.Platform = process.platform,
+): string {
+  if (!configDir) {
     return name;
   }
 
-  return withConfigDirSuffix(name, configDir);
+  const dir = canonicalDir([configDir], platform);
+  if (dir === canonicalDir([homedir, ".claude"], platform)) {
+    return name;
+  }
+
+  return withConfigDirSuffix(name, dir);
 }
 
 /**
