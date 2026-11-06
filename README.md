@@ -63,6 +63,23 @@ In remote windows (WSL, SSH, containers), add the setting to the remote settings
 
 Usage history and the weekly forecast are kept separately for each config dir, so accounts don't mix in the History panel. On macOS, the config dir also selects the matching Keychain entry.
 
+**Multiple accounts:** To see several accounts at once, for example a team and a personal subscription, list their config dirs in `claudeUsage.accounts`:
+
+```jsonc
+"claudeUsage.accounts": [
+  { "label": "Team", "configDir": "~/.claude" },
+  { "label": "Personal", "configDir": "~/.claude-personal" }
+]
+```
+
+Each account gets its own status bar items, in list order and labeled, with its own tooltip, history and forecast. The account Claude Code uses in this window (see above) is marked with the pulse icon. You can hide an account's items, for example its forecast dot, by right-clicking the status bar. When more than one account is listed, the Usage History panel has a dropdown to switch accounts; it opens on the one Claude Code uses in this window.
+
+- `configDir` must be an absolute path; `~` is expanded, and an empty value means `~/.claude`.
+- The setting can only be set in user settings (or remote settings in remote windows), not in a workspace's settings, so a repository can't point the extension at other directories. Like other user settings, it can differ per VS Code profile.
+- Each account costs one API request per refresh interval, shared across windows through that account's cache file.
+
+**When the token has expired:** Claude Code only renews an account's token while it runs, so an account you haven't used for a while has no valid token. The extension then shows that account's last known usage, greyed out, with the time it was fetched in the tooltip and with any resets that have passed since applied. Once the weekly limit has reset since that fetch, it shows ✗ instead. Using Claude with that account (or `claude /login`) brings it back up to date.
+
 ## Settings
 
 | Setting                               | Default | Description                                                        |
@@ -76,6 +93,7 @@ Usage history and the weekly forecast are kept separately for each config dir, s
 | `claudeUsage.showWeeklyResetMarkers`  | `true`  | Show weekly reset markers in the History panel                     |
 | `claudeUsage.showWeeklyForecast`      | `true`  | Show weekly pace and forecast overlays in the History panel        |
 | `claudeUsage.showScopedWeeklyLimits`  | `true`  | Show model-specific weekly limits in the tooltip and History panel |
+| `claudeUsage.accounts`                | `[]`    | Accounts to show side by side (see [Multiple accounts](#requirements)) |
 
 Thresholds are expressed as **used %** (e.g. the default `60` means "warn when 60% has been consumed, i.e. 40% remaining").
 

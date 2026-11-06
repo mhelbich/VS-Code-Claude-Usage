@@ -8,6 +8,12 @@ All notable changes to the **Claude Code Usage Status** extension will be docume
 
 - The extension follows the Claude Code extension's `claudeCode.environmentVariables` setting for `CLAUDE_CONFIG_DIR`, the way Claude Code launched from the same window does: only absolute paths apply, and `claudeCode.claudeProcessWrapper` is respected. VS Code profiles that point Claude at different config dirs now each show their own account's usage, and switching the setting takes effect without a reload (thanks @jsilvermist).
 - Usage history and the weekly forecast are kept per config dir, since VS Code shares the extension's global storage across profiles. The default `~/.claude` keeps its existing history, including when `CLAUDE_CONFIG_DIR` points at it explicitly. Setups that already set `CLAUDE_CONFIG_DIR` in VS Code's own environment start a new history, because the shared file can't be split by account.
+- `claudeUsage.accounts` shows several Claude accounts side by side, for example a team and a personal subscription: each listed config dir gets its own labeled status bar items, tooltip, history and forecast, and the account Claude Code uses in the window is marked with the pulse icon.
+- With more than one account listed, the Usage History panel has a dropdown to switch between accounts.
+
+### Changed
+
+- An account without a valid token, for example after its token expired while it was idle, now shows its last known usage greyed out (with the time it was fetched, and with resets since then applied) instead of ✗, until its weekly limit resets.
 
 ### Fixed
 
