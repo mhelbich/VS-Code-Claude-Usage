@@ -15,9 +15,11 @@ export function withConfigDirSuffix(name: string, configDir: string | undefined)
   return `${name}-${suffix}`;
 }
 
-// Canonical form of a dir for comparing and hashing: resolved (separators and trailing slashes
-// normalized), and lowercased on Windows, where paths are case-insensitive.
-function canonicalDir(segments: string[], platform: NodeJS.Platform): string {
+/**
+ * Canonical form of a dir for comparing and hashing: resolved (separators and trailing slashes
+ * normalized), and lowercased on Windows, where paths are case-insensitive.
+ */
+export function canonicalDir(segments: string[], platform: NodeJS.Platform): string {
   if (platform === "win32") {
     return path.win32.resolve(...segments).toLowerCase();
   }

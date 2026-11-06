@@ -73,6 +73,9 @@ function harness(accounts: Record<string, { token: string | null; cache?: CacheE
       shown.push({ configDir, usage: data });
       actions.push({ type: "fetch-success", usage: data, forecast, thresholds: { warning: 70, danger: 90 } });
     },
+    showLastKnown: (cached) => {
+      actions.push({ type: "last-known", usage: cached.data, fetchedAt: cached.fetchedAt, thresholds: { warning: 70, danger: 90 } });
+    },
     dispatch: (action) => actions.push(action),
     getRefreshIntervalSeconds: () => 150,
     onIncompleteForecastWeek: () => {},
@@ -229,4 +232,23 @@ test("a refresh for the previous account can't overwrite the new account's usage
 
   assert.deepEqual(h.shown, [{ configDir: B, usage: usage(70) }]);
   assert.deepEqual(h.caches, { [B]: usage(70) });
+});
+
+test("refreshUsage shows the last known usage when there's no token but a cache from before the weekly reset", timeout, async () => {
+  const cache = { fetchedAt: NOW - 3 * 3_600_000, data: usage(15) };
+  const h = harness({ [A]: { token: null, cache } });
+
+  await refreshUsage(h.deps);
+
+  assert.equal(h.fetches.length, 0);
+  assert.deepEqual(h.lastAction(), { type: "last-known", usage: usage(15), fetchedAt: cache.fetchedAt, thresholds: { warning: 70, danger: 90 } });
+});
+
+test("refreshUsage reports no-token once the cached usage's weekly reset has passed", timeout, async () => {
+  const expired = { ...usage(15), seven_day: { utilization: 15, resets_at: "2026-10-12T09:00:00Z" } } as UsageResponse;
+  const h = harness({ [A]: { token: null, cache: { fetchedAt: NOW - 3 * 86_400_000, data: expired } } });
+
+  await refreshUsage(h.deps);
+
+  assert.deepEqual(h.lastAction(), { type: "no-token" });
 });

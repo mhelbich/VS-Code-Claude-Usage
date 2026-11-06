@@ -26,6 +26,8 @@ export interface ClaudeUsageConfiguration {
   showWeeklyResetMarkers: boolean;
   showWeeklyForecast: boolean;
   showScopedWeeklyLimits: boolean;
+  /** Raw `claudeUsage.accounts` entries; validated by parseAccountsSetting(). */
+  accounts: unknown[];
 }
 export type ClaudeUsageConfigKey = keyof ClaudeUsageConfiguration;
 
@@ -42,6 +44,7 @@ export const CONFIG_DEFAULTS: ClaudeUsageConfiguration = {
   showWeeklyResetMarkers: true,
   showWeeklyForecast: true,
   showScopedWeeklyLimits: true,
+  accounts: [],
 };
 
 /**
@@ -57,6 +60,7 @@ export const CONFIG_KEYS = {
   showWeeklyResetMarkers: "showWeeklyResetMarkers",
   showWeeklyForecast: "showWeeklyForecast",
   showScopedWeeklyLimits: "showScopedWeeklyLimits",
+  accounts: "accounts",
 } as const satisfies Record<ClaudeUsageConfigKey, ClaudeUsageConfigKey>;
 
 /**
@@ -72,6 +76,7 @@ export const CONFIG_PATHS = {
   showWeeklyResetMarkers: `${CONFIG_SECTION}.${CONFIG_KEYS.showWeeklyResetMarkers}`,
   showWeeklyForecast: `${CONFIG_SECTION}.${CONFIG_KEYS.showWeeklyForecast}`,
   showScopedWeeklyLimits: `${CONFIG_SECTION}.${CONFIG_KEYS.showScopedWeeklyLimits}`,
+  accounts: `${CONFIG_SECTION}.${CONFIG_KEYS.accounts}`,
 } as const satisfies Record<ClaudeUsageConfigKey, `${typeof CONFIG_SECTION}.${ClaudeUsageConfigKey}`>;
 
 /**

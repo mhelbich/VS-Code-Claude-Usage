@@ -1,34 +1,9 @@
+import * as os from "os";
 import * as vscode from "vscode";
-import { fetchUsage } from "./api";
-import { readCache, writeCache } from "./cache";
+import { AccountMonitor, type AccountMonitorEnvironment } from "./accountMonitor";
+import { diffAccounts, parseAccountsSetting, resolveAccounts } from "./accounts";
 import { CLAUDE_CODE_ENVIRONMENT_SETTING, CLAUDE_CODE_PROCESS_WRAPPER_SETTING, COMMANDS, CONFIG_PATHS, getClaudeConfigDir, getClaudeUsageSetting } from "./config";
-import { withAccountSuffix } from "./configDir";
-import { getAccessToken } from "./credentials";
-import { EMPTY_FORECAST_PROFILE, updateForecastProfile, type ForecastProfile } from "./forecast";
-import { getHistoryFileName, HistoryStore } from "./history";
-import { refreshUsage } from "./refresh";
-import { Action, BarProps, State, forecastStateToBarProps, reduce, stateToBarProps } from "./statusBar";
 import { UsageHistoryProvider } from "./webviewProvider";
-
-function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
-  bar.text = props.text;
-  bar.color = props.color ? new vscode.ThemeColor(props.color) : undefined;
-  bar.backgroundColor = props.backgroundColor ? new vscode.ThemeColor(`statusBarItem.${props.backgroundColor}Background`) : undefined;
-  if (props.tooltipIsMarkdown) {
-    const md = new vscode.MarkdownString(undefined, true);
-    md.isTrusted = true;
-    md.supportHtml = true;
-    md.appendMarkdown(props.tooltipText);
-    bar.tooltip = md;
-  } else {
-    bar.tooltip = props.tooltipText;
-  }
-  if (props.visible === false) {
-    bar.hide();
-  } else {
-    bar.show();
-  }
-}
 
 // ─── Extension lifecycle ──────────────────────────────────────────────────────
 
@@ -36,47 +11,15 @@ export function activate(ctx: vscode.ExtensionContext) {
   const log = vscode.window.createOutputChannel("Claude Code Usage", { log: true });
   ctx.subscriptions.push(log);
 
-  // Only the Claude Code extension's settings can change this at runtime; see the listener below.
-  let configDir = getClaudeConfigDir();
+  // Monitored accounts in list order: the one Claude in this window uses, or those in claudeUsage.accounts.
+  const monitors = new Map<string, AccountMonitor>();
+  // The account picked in the history panel's dropdown; undefined follows the active account.
+  let panelKey: string | undefined;
 
-  const historyStore = new HistoryStore(
-    () => vscode.Uri.joinPath(ctx.globalStorageUri, getHistoryFileName(configDir)).fsPath,
-    (msg) => log.warn(msg),
-    () => getClaudeUsageSetting("historyRetentionDays"),
-  );
-  const historyProvider = new UsageHistoryProvider(ctx.extensionUri, historyStore, ctx.globalState);
-  ctx.subscriptions.push(vscode.window.registerWebviewViewProvider(UsageHistoryProvider.viewId, historyProvider));
-
-  // Create status bar item
-  const bar = vscode.window.createStatusBarItem("claudeUsage.main", vscode.StatusBarAlignment.Right, 100);
-  bar.name = "Claude Usage";
-  bar.command = COMMANDS.refresh;
-  ctx.subscriptions.push(bar);
-
-  const forecastBar = vscode.window.createStatusBarItem("claudeUsage.forecast", vscode.StatusBarAlignment.Right, 99);
-  forecastBar.name = "Claude Usage Forecast";
-  forecastBar.command = COMMANDS.refresh;
-  ctx.subscriptions.push(forecastBar);
-
-  function onIncompleteForecastWeek(reset: number, sampleCount: number): void {
-    log.debug(`Weekly forecast profile: dropping week ending ${new Date(reset).toISOString()} — only ${sampleCount} usable sample(s), not enough coverage to learn from`);
+  function panelMonitor(): AccountMonitor {
+    const all = [...monitors.values()];
+    return (panelKey !== undefined ? monitors.get(panelKey) : undefined) ?? all.find((monitor) => monitor.active) ?? all[0];
   }
-
-  let state: State = { kind: "loading" };
-  const forecastProfileKey = () => withAccountSuffix("weeklyForecastProfile.v1", configDir);
-
-  function loadForecastProfile(): ForecastProfile {
-    const profile = updateForecastProfile(
-      ctx.globalState.get<ForecastProfile>(forecastProfileKey()) ?? EMPTY_FORECAST_PROFILE,
-      historyStore.read(),
-      undefined,
-      onIncompleteForecastWeek,
-    );
-    void ctx.globalState.update(forecastProfileKey(), profile);
-    return profile;
-  }
-
-  let forecastProfile = loadForecastProfile();
 
   function getHistoryViewSettings() {
     // Keep persisted defaults in one place; the webview can still override them locally per session.
@@ -88,14 +31,81 @@ export function activate(ctx: vscode.ExtensionContext) {
     };
   }
 
-  function dispatch(action: Action): void {
-    state = reduce(state, action);
-    const showUsed = getClaudeUsageSetting("showUsed");
-    applyProps(stateToBarProps(state, showUsed, getClaudeUsageSetting("showScopedWeeklyLimits")), bar);
-    applyProps(forecastStateToBarProps(state, showUsed), forecastBar);
+  const historyProvider = new UsageHistoryProvider(
+    ctx.extensionUri,
+    () => panelMonitor().history,
+    ctx.globalState,
+    (key) => {
+      panelKey = key;
+      refreshPanel();
+    },
+  );
+  ctx.subscriptions.push(vscode.window.registerWebviewViewProvider(UsageHistoryProvider.viewId, historyProvider));
+
+  function refreshPanel(): void {
+    const shown = panelMonitor();
+    historyProvider.setAccounts(
+      [...monitors.values()].map((monitor) => ({ key: monitor.key, label: monitor.label ?? "", active: monitor.active })),
+      shown.key,
+    );
+    historyProvider.refresh(shown.history.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), shown.forecast);
   }
 
-  historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), null);
+  const monitorEnvironment: AccountMonitorEnvironment = {
+    globalStorageUri: ctx.globalStorageUri,
+    globalState: ctx.globalState,
+    log,
+    onHistoryChanged: (monitor) => {
+      if (monitor === panelMonitor()) {
+        refreshPanel();
+      }
+    },
+  };
+
+  /** Brings the monitors in line with the account list; returns the new ones, which still need a refresh. */
+  function reconcile(): AccountMonitor[] {
+    const { accounts, warnings } = resolveAccounts(parseAccountsSetting(getClaudeUsageSetting("accounts")), getClaudeConfigDir(), os.homedir());
+    for (const warning of warnings) {
+      log.warn(warning);
+    }
+
+    const { add, remove } = diffAccounts(monitors.keys(), accounts);
+    for (const key of remove) {
+      monitors.get(key)?.dispose();
+      monitors.delete(key);
+    }
+
+    const added: AccountMonitor[] = [];
+    const ordered = new Map<string, AccountMonitor>();
+    accounts.forEach((account, index) => {
+      let monitor = monitors.get(account.key);
+      if (monitor) {
+        monitor.update(account, index);
+      } else {
+        monitor = new AccountMonitor(account, index, monitorEnvironment);
+        added.push(monitor);
+      }
+      ordered.set(account.key, monitor);
+    });
+    monitors.clear();
+    for (const [key, monitor] of ordered) {
+      monitors.set(key, monitor);
+    }
+
+    if (add.length || remove.length) {
+      const names = accounts.map((account) => `${account.label ?? account.configDir ?? "~/.claude"}${account.active ? " (active)" : ""}`);
+      log.info(`Monitoring ${names.join(", ")}`);
+    }
+    if (panelKey !== undefined && !monitors.has(panelKey)) {
+      panelKey = undefined;
+    }
+    refreshPanel();
+    return added;
+  }
+
+  async function refreshAll(force = false): Promise<void> {
+    await Promise.all([...monitors.values()].map((monitor) => monitor.refresh(force)));
+  }
 
   let timer: ReturnType<typeof setInterval> | undefined;
   ctx.subscriptions.push(
@@ -104,85 +114,51 @@ export function activate(ctx: vscode.ExtensionContext) {
         clearInterval(timer);
         timer = undefined;
       }
+      for (const monitor of monitors.values()) {
+        monitor.dispose();
+      }
+      monitors.clear();
     }),
   );
-
-  function refresh(force = false): Promise<void> {
-    return refreshUsage(
-      {
-        getConfigDir: () => configDir,
-        readCache,
-        writeCache,
-        getAccessToken,
-        fetchUsage,
-        getForecastProfile: () => forecastProfile,
-        saveForecastProfile: (profile) => {
-          forecastProfile = profile;
-          return ctx.globalState.update(forecastProfileKey(), profile);
-        },
-        appendHistory: (entry) => historyStore.append(entry),
-        showUsage: (usage, forecast) => {
-          historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), forecast);
-          dispatch({
-            type: "fetch-success",
-            usage,
-            forecast,
-            thresholds: {
-              warning: getClaudeUsageSetting("warningThreshold"),
-              danger: getClaudeUsageSetting("dangerThreshold"),
-            },
-          });
-        },
-        dispatch,
-        getRefreshIntervalSeconds: () => getClaudeUsageSetting("refreshIntervalSeconds"),
-        onIncompleteForecastWeek,
-        log,
-        now: () => Date.now(),
-      },
-      force,
-    );
-  }
 
   function startTimer() {
     if (timer) clearInterval(timer);
     const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
     log.info(`Refresh timer set to ${intervalSeconds}s`);
-    timer = setInterval(refresh, intervalSeconds * 1000);
+    timer = setInterval(() => void refreshAll(), intervalSeconds * 1000);
   }
 
   // Register commands and listeners
   ctx.subscriptions.push(
     vscode.commands.registerCommand(COMMANDS.refresh, () => {
       log.info("Manual refresh triggered");
-      refresh(true);
+      void refreshAll(true);
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration(CONFIG_PATHS.refreshIntervalSeconds)) {
         startTimer();
       }
-      if (e.affectsConfiguration(CLAUDE_CODE_ENVIRONMENT_SETTING) || e.affectsConfiguration(CLAUDE_CODE_PROCESS_WRAPPER_SETTING)) {
-        const updatedConfigDir = getClaudeConfigDir();
-        if (updatedConfigDir !== configDir) {
-          configDir = updatedConfigDir;
-          log.info(`Claude config dir changed — ${configDir ?? "default"}`);
-          forecastProfile = loadForecastProfile();
-          historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), null);
-          // Not forced: the cache is per config dir, so a fresh entry for this account can be reused.
-          refresh();
+      if (
+        e.affectsConfiguration(CONFIG_PATHS.accounts) ||
+        e.affectsConfiguration(CLAUDE_CODE_ENVIRONMENT_SETTING) ||
+        e.affectsConfiguration(CLAUDE_CODE_PROCESS_WRAPPER_SETTING)
+      ) {
+        // Not forced: the cache is per config dir, so a fresh entry for a new account can be reused.
+        for (const monitor of reconcile()) {
+          void monitor.refresh();
         }
       }
       if (e.affectsConfiguration(CONFIG_PATHS.warningThreshold) || e.affectsConfiguration(CONFIG_PATHS.dangerThreshold)) {
         const warning = getClaudeUsageSetting("warningThreshold");
         const danger = getClaudeUsageSetting("dangerThreshold");
         log.info(`Thresholds updated — warning: ${warning}%, danger: ${danger}%`);
-        dispatch({
-          type: "thresholds-changed",
-          thresholds: { warning, danger },
-        });
+        for (const monitor of monitors.values()) {
+          monitor.thresholdsChanged({ warning, danger });
+        }
       }
       if (e.affectsConfiguration(CONFIG_PATHS.historyRetentionDays)) {
         log.info(`History retention updated — ${getClaudeUsageSetting("historyRetentionDays")} days`);
-        historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), state.kind === "ok" ? state.forecast ?? null : null);
+        refreshPanel();
       }
       if (
         e.affectsConfiguration(CONFIG_PATHS.showUsed) ||
@@ -191,21 +167,19 @@ export function activate(ctx: vscode.ExtensionContext) {
         e.affectsConfiguration(CONFIG_PATHS.showWeeklyForecast) ||
         e.affectsConfiguration(CONFIG_PATHS.showScopedWeeklyLimits)
       ) {
-        const showUsed = getClaudeUsageSetting("showUsed");
-        log.info(`Display settings updated — showUsed: ${showUsed}`);
-        applyProps(stateToBarProps(state, showUsed, getClaudeUsageSetting("showScopedWeeklyLimits")), bar);
-        applyProps(forecastStateToBarProps(state, showUsed), forecastBar);
-        historyProvider.refresh(historyStore.read(), showUsed, getHistoryViewSettings(), state.kind === "ok" ? state.forecast ?? null : null);
+        log.info(`Display settings updated — showUsed: ${getClaudeUsageSetting("showUsed")}`);
+        for (const monitor of monitors.values()) {
+          monitor.render();
+        }
+        refreshPanel();
       }
     }),
   );
 
-  // Initialize status bar immediately then kick off async refresh
-  const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
-  log.info(`Activated — refresh interval: ${intervalSeconds}s`);
-  applyProps(stateToBarProps(state, getClaudeUsageSetting("showUsed"), getClaudeUsageSetting("showScopedWeeklyLimits")), bar);
-  applyProps(forecastStateToBarProps(state, getClaudeUsageSetting("showUsed")), forecastBar);
-  refresh();
+  // Show the status bar items immediately, then kick off the first refresh.
+  log.info(`Activated — refresh interval: ${getClaudeUsageSetting("refreshIntervalSeconds")}s`);
+  reconcile();
+  void refreshAll();
   startTimer();
 }
 

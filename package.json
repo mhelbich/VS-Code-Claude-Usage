@@ -117,6 +117,27 @@
           "default": true,
           "description": "Show model-specific weekly limits in the tooltip and Usage History panel.",
           "order": 9
+        },
+        "claudeUsage.accounts": {
+          "type": "array",
+          "default": [],
+          "scope": "machine",
+          "order": 10,
+          "markdownDescription": "Claude accounts to show side by side, each with its own status bar items, history and forecast. Leave empty to show the account Claude Code uses in this window (see `claudeCode.environmentVariables`). `configDir` is the account's Claude config dir (`~` is expanded; empty means `~/.claude`). In remote windows, set this in the remote settings.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "Name shown in the status bar and the Usage History panel, e.g. \"Work\"."
+              },
+              "configDir": {
+                "type": "string",
+                "description": "Absolute path of the account's Claude config dir, e.g. \"~/.claude-work\"."
+              }
+            },
+            "additionalProperties": false
+          }
         }
       }
     }
