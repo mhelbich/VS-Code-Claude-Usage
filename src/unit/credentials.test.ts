@@ -2,13 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ClaudeCredentials,
+  type ClaudeCredentials,
   getAccessTokenFromCredentials,
   getAccessTokenWithDependencies,
   getCredentialFilePath,
   getKeychainServiceNames,
   parseClaudeCredentials,
-  resolveCredentialsConfigDir,
 } from "../credentials";
 
 const validCredentials: ClaudeCredentials = {
@@ -196,34 +195,6 @@ test("getAccessTokenWithDependencies returns null when the credentials file cann
   });
 
   assert.equal(token, null);
-});
-
-test("resolveCredentialsConfigDir falls back to CLAUDE_CONFIG_DIR when CLAUDE_SECURESTORAGE_CONFIG_DIR is unset", () => {
-  assert.equal(resolveCredentialsConfigDir({ CLAUDE_CONFIG_DIR: "/custom/claude" }), "/custom/claude");
-});
-
-test("resolveCredentialsConfigDir prefers CLAUDE_SECURESTORAGE_CONFIG_DIR when both are set", () => {
-  assert.equal(
-    resolveCredentialsConfigDir({
-      CLAUDE_CONFIG_DIR: "/custom/claude",
-      CLAUDE_SECURESTORAGE_CONFIG_DIR: "/other/profile",
-    }),
-    "/other/profile",
-  );
-});
-
-test("resolveCredentialsConfigDir treats an empty CLAUDE_SECURESTORAGE_CONFIG_DIR as pinning the default store", () => {
-  assert.equal(
-    resolveCredentialsConfigDir({
-      CLAUDE_CONFIG_DIR: "/custom/claude",
-      CLAUDE_SECURESTORAGE_CONFIG_DIR: "",
-    }),
-    undefined,
-  );
-});
-
-test("resolveCredentialsConfigDir returns undefined when neither variable is set", () => {
-  assert.equal(resolveCredentialsConfigDir({}), undefined);
 });
 
 test("getAccessTokenWithDependencies returns null when the credentials file contains invalid JSON", () => {

@@ -1,8 +1,8 @@
 import { execSync } from "child_process";
-import { createHash } from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { withConfigDirSuffix } from "./configDir";
 
 /**
  * Interface for Claude credentials, representing the structure of the data that can be stored in the Keychain or the .credentials.json file.
@@ -37,8 +37,7 @@ export function getKeychainServiceNames(configDir: string | undefined): string[]
     return [KEYCHAIN_SERVICE];
   }
 
-  const suffix = createHash("sha256").update(configDir.normalize("NFC")).digest("hex").slice(0, 8);
-  return [`${KEYCHAIN_SERVICE}-${suffix}`, KEYCHAIN_SERVICE];
+  return [withConfigDirSuffix(KEYCHAIN_SERVICE, configDir), KEYCHAIN_SERVICE];
 }
 
 export function parseClaudeCredentials(raw: string): ClaudeCredentials {
@@ -64,23 +63,6 @@ export function getAccessTokenFromCredentials(creds: ClaudeCredentials, now = Da
 
 function getAccessTokenFromRaw(raw: string, now: number): string | null {
   return getAccessTokenFromCredentials(parseClaudeCredentials(raw), now);
-}
-
-/**
- * Resolves which directory Claude Code's own credential store follows.
- * CLAUDE_SECURESTORAGE_CONFIG_DIR overrides CLAUDE_CONFIG_DIR for this purpose when set —
- * including when set to an empty string, which pins the default store even if
- * CLAUDE_CONFIG_DIR points elsewhere. See https://github.com/anthropics/claude-code/issues/79223.
- */
-export function resolveCredentialsConfigDir(env: {
-  CLAUDE_SECURESTORAGE_CONFIG_DIR?: string;
-  CLAUDE_CONFIG_DIR?: string;
-}): string | undefined {
-  if (env.CLAUDE_SECURESTORAGE_CONFIG_DIR !== undefined) {
-    return env.CLAUDE_SECURESTORAGE_CONFIG_DIR || undefined;
-  }
-
-  return env.CLAUDE_CONFIG_DIR;
 }
 
 export function getAccessTokenWithDependencies(deps: CredentialDependencies): string | null {
@@ -114,13 +96,13 @@ export function getAccessTokenWithDependencies(deps: CredentialDependencies): st
 }
 
 /**
- * Looks up the Claude access token, first trying to read from the macOS Keychain (if on macOS), and then falling back to reading from a .credentials.json file in the user's home directory (or a custom path defined by the CLAUDE_CONFIG_DIR / CLAUDE_SECURESTORAGE_CONFIG_DIR environment variables). Returns the access token if found and valid, or null if not found or expired.
+ * Looks up the Claude access token, first trying to read from the macOS Keychain (if on macOS), and then falling back to reading from a .credentials.json file in the user's home directory (or the given config dir, resolved from the CLAUDE_CONFIG_DIR / CLAUDE_SECURESTORAGE_CONFIG_DIR environment variables). Returns the access token if found and valid, or null if not found or expired.
  * This function abstracts away the platform-specific details of how credentials are stored and accessed, providing a simple interface for the rest of the extension to retrieve the necessary token for API calls.
  */
-export function getAccessToken(): string | null {
+export function getAccessToken(configDir: string | undefined): string | null {
   return getAccessTokenWithDependencies({
     platform: process.platform,
-    configDir: resolveCredentialsConfigDir(process.env),
+    configDir,
     homedir: () => os.homedir(),
     joinPath: path.join,
     execSync,
